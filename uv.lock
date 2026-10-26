@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 
 [[package]]
 name = "altgraph"
@@ -18,6 +18,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "execnet"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/89/780e11f9588d9e7128a3f87788354c7946a9cbb1401ad38a48c4db9a4f07/execnet-2.1.2.tar.gz", hash = "sha256:63d83bfdd9a23e35b9c6a3261412324f964c2ec8dcd8d3c6916ee9373e0befcd", size = 166622, upload-time = "2025-11-12T09:56:37.75Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/84/02fc1827e8cdded4aa65baef11296a9bbe595c474f0d6d758af082d849fd/execnet-2.1.2-py3-none-any.whl", hash = "sha256:67fba928dd5a544b783f6056f449e5e3931a5c378b128bc18501f7ea79e296ec", size = 40708, upload-time = "2025-11-12T09:56:36.333Z" },
 ]
 
 [[package]]
@@ -47,11 +56,6 @@ version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e0/12/09e62f051af1de7ca84be1d69154bd0514416ef72237e2081584cc268bc9/opencc-1.4.2.tar.gz", hash = "sha256:47977905f131d7d9cfcec29fba5d841154907e1da73103105a4a68744e0f4f1a", size = 11637673, upload-time = "2026-08-22T19:09:31.761Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/34/b9/5e31c48d97a4738aa5c6ceb3f7c27693f74354d1603103eaad543b7660b8/opencc-1.4.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:0e444f4bf4aff9f7396289652ea80c456c7b0237a8431cd0aece350d314e8816", size = 2149919, upload-time = "2026-08-22T19:13:50.655Z" },
-    { url = "https://files.pythonhosted.org/packages/8e/88/9e8cd33abb5ef4d57391088a7a74d0f7b3c7143d9c0abeda99be7849f814/opencc-1.4.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:01674abf96cd6b6358755d692f1d56fde39deb77383a095c23c211cc8502e57f", size = 2051663, upload-time = "2026-08-22T19:09:37.341Z" },
-    { url = "https://files.pythonhosted.org/packages/fe/32/aa83c2631bb1d829e1782505da9ce9511bb110fb22bb9e9fc72de10e8a6e/opencc-1.4.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ba6d6f45ce4908e0c24a034d844d3f43be6f2e8c69a838028806f1af8e721bef", size = 2408714, upload-time = "2026-08-22T19:11:02.068Z" },
-    { url = "https://files.pythonhosted.org/packages/23/f2/80e1bfdb82b16057c9961b889d15f644b0b0ea500c2ba6d1845192c23ee9/opencc-1.4.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:25c34e75fe2ab2bf5b43d89e2cf9413fbfd693c9e4851c9b7b641d50e9793f63", size = 2446584, upload-time = "2026-08-22T19:09:28.861Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/15/7bc47cc20436d1eb7163f15b200531bb4e18a6ee261784465019f87b049e/opencc-1.4.2-cp313-cp313-win_amd64.whl", hash = "sha256:4338dc5c7c6c7b42a847f3a8ecbbdfb2543e39d63bebcbe25f10e3c81b1c76fb", size = 2890688, upload-time = "2026-08-22T19:13:45.849Z" },
     { url = "https://files.pythonhosted.org/packages/fd/66/6198bde333ecc6151d7ee3e25c6d5ba2b9494130c1739e943e03ad459830/opencc-1.4.2-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:0b14d64943de6c3575ae1e863dbbf4a3c6c7e7ce7e90f85772b2ec4dc24a5aca", size = 2150039, upload-time = "2026-08-22T19:13:51.722Z" },
     { url = "https://files.pythonhosted.org/packages/19/0b/94de5296f99aa3a7e8e9ced388b0ada742b57394eb8cec8bc5ecc882af54/opencc-1.4.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:2dd2f8c3f7e633d252753c8f69298d5f446e02d62a3cf9c6a3c18683b5346c89", size = 2051838, upload-time = "2026-08-22T19:09:38.554Z" },
     { url = "https://files.pythonhosted.org/packages/03/a6/45a09a6f0344cca2d645254ee9494684733ecdf1c7faf3135577430a4d8c/opencc-1.4.2-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:050bdc8516b4830be810504dfed1e5d6ac8ca81f19030b7c187abec5160683ca", size = 2408987, upload-time = "2026-08-22T19:11:03.299Z" },
@@ -91,6 +95,7 @@ dev = [
     { name = "pyinstaller" },
     { name = "pytest" },
     { name = "pytest-qt" },
+    { name = "pytest-xdist" },
 ]
 
 [package.metadata]
@@ -104,6 +109,7 @@ dev = [
     { name = "pyinstaller", specifier = ">=6.22.3" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-qt", specifier = ">=4.5.0" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
 ]
 
 [[package]]
@@ -270,6 +276,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d3/61/8bdec02663c18bf5016709b909411dce04a868710477dc9b9844ffcf8dd2/pytest_qt-4.5.0.tar.gz", hash = "sha256:51620e01c488f065d2036425cbc1cbcf8a6972295105fd285321eb47e66a319f", size = 128702, upload-time = "2025-07-01T17:24:39.889Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/d0/8339b888ad64a3d4e508fed8245a402b503846e1972c10ad60955883dcbb/pytest_qt-4.5.0-py3-none-any.whl", hash = "sha256:ed21ea9b861247f7d18090a26bfbda8fb51d7a8a7b6f776157426ff2ccf26eff", size = 37214, upload-time = "2025-07-01T17:24:38.226Z" },
+]
+
+[[package]]
+name = "pytest-xdist"
+version = "3.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "execnet" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/b4/439b179d1ff526791eb921115fca8e44e596a13efeda518b9d845a619450/pytest_xdist-3.8.0.tar.gz", hash = "sha256:7e578125ec9bc6050861aa93f2d59f1d8d085595d6551c2c90b6f4fad8d3a9f1", size = 88069, upload-time = "2025-07-01T13:30:59.346Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl", hash = "sha256:202ca578cfeb7370784a8c33d6d05bc6e13b4f25b5053c30a152269fd10f0b88", size = 46396, upload-time = "2025-07-01T13:30:56.632Z" },
 ]
 
 [[package]]

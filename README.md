@@ -453,7 +453,7 @@ workspace\                ← 工作區（你的所有修改都在這裡）
 
 [uv](https://docs.astral.sh/uv/) 是 Python 的「管家」，它會幫你：
 
-- 📦 **準備 Python**：專案需要 Python 3.13，電腦上沒有的話，uv 會自動下載，不會影響電腦上其他的 Python。
+- 📦 **準備 Python**：專案需要 Python 3.14，電腦上沒有的話，uv 會自動下載，不會影響電腦上其他的 Python。
 - 🧰 **準備套件**：PySide6（畫面）、OpenCC（簡轉繁）、pytest（測試）……照 `uv.lock` 裡記錄的版本一個不差地裝好。
 - ▶️ **用對的環境執行**：`uv run 指令` 的意思是「在這個專案專用的環境裡執行這個指令」。
 
@@ -518,7 +518,7 @@ uv 會建立 `.venv\` 資料夾，並安裝所有套件（包含測試與打包�
 | 只跑名稱含某個字的測試 | `uv run pytest -k glossary` | 只跑名稱裡有 `glossary` 的測試 |
 | 把警告也當成錯誤 | `uv run pytest -W error` | 正式發佈前建議用這個，確保測試輸出乾淨 |
 | **打包成 exe** | 見下方 | 產生 `dist\PLLangStudio.exe` |
-| 查看 Python 版本 | `uv run python --version` | 應該顯示 `Python 3.13.x` |
+| 查看 Python 版本 | `uv run python --version` | 應該顯示 `Python 3.14.x` |
 | 查看程式版本 | `uv run python -c "import pllangstudio; print(pllangstudio.__version__)"` | 例如 `0.2.0` |
 
 ### 打包成 exe
@@ -586,7 +586,7 @@ $env:APPDATA = "$PWD\dev-appdata"; uv run python -m pllangstudio
 
 | 部分 | 技術 |
 |---|---|
-| 語言 | Python 3.13，用 [uv](https://docs.astral.sh/uv/) 管理 |
+| 語言 | Python 3.14，用 [uv](https://docs.astral.sh/uv/) 管理 |
 | 畫面 | PySide6（Qt 6） |
 | 簡轉繁 | OpenCC（`s2twp`：台灣用字＋台灣用語） |
 | 測試 | pytest＋pytest-qt，直接用 PL/SQL Developer 的真實語言檔測試（唯讀） |

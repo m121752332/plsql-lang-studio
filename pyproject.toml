@@ -1,20 +1,35 @@
+# 專案設定檔（PEP 621），供 uv / pip 讀取
 [project]
+# 套件名稱
 name = "pllangstudio"
+# 版本號（發行時請同步更新 git tag，例如 v0.1.0）
 version = "0.1.0"
+# 專案簡述
 description = "PL/SQL Developer 語言編輯與比對器"
+# 說明文件
 readme = "README.md"
-requires-python = ">=3.13"
+# 最低 Python 版本
+requires-python = ">=3.14"
+# 執行時期依賴
 dependencies = [
-    "opencc>=1.4.2",
-    "pyside6>=6.12.0",
+    "opencc>=1.4.2",    # 簡繁中文轉換
+    "pyside6>=6.12.0",  # Qt 圖形介面
 ]
 
+# 開發用依賴群組（uv sync 預設會安裝）
 [dependency-groups]
 dev = [
-    "pyinstaller>=6.22.3",
-    "pytest>=9.1.1",
-    "pytest-qt>=4.5.0",
+    "pyinstaller>=6.22.3",  # 打包成可執行檔
+    "pytest>=9.1.1",        # 測試框架
+    "pytest-qt>=4.5.0",     # Qt 介面測試輔助
+    "pytest-xdist>=3.8.0",  # 平行執行測試，加快速度
 ]
+
+# pytest 設定
 [tool.pytest.ini_options]
+# 讓測試能匯入專案根目錄與 tests 內的模組
 pythonpath = [".", "tests"]
+# 測試檔所在目錄
 testpaths = ["tests"]
+# 預設用 pytest-xdist 依 CPU 核心數平行執行；除錯時可加 -n0 改回單程序
+addopts = "-n auto"
