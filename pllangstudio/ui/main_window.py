@@ -267,7 +267,7 @@ class MainWindow(QMainWindow):
             return
         if (master, slave) == (self.master_name, self.slave_name):
             return
-        if slave != self.slave_name and confirm and not self.confirm_discard():
+        if confirm and not self.confirm_discard():
             self.refresh_files()
             return
         if not (self._ensure_imported(master) and self._ensure_imported(slave)):

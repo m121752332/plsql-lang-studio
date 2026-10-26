@@ -2,6 +2,7 @@ import json
 import shutil
 
 import pytest
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox
 
 from langdata import LANG_DIR, needs_lang_dir
@@ -123,3 +124,39 @@ def test_apply_edits_rejects_multiline_in_single_line_row(qtbot, env):
     assert len(calls) == 1 and calls[0][1].get("error") is True
     assert w.undo_stack.count() == 0
     assert w.model.slave_text(i) == before
+
+
+def _edit_cancel_row(win):
+    i = row_of(win, "&取消")
+    win.model.setData(win.model.index(i, COL_SLAVE), "&取消X")
+    assert win.model.modified_count() == 1
+    return i
+
+
+def test_master_change_asks_before_discarding_edits(win):
+    win.ws.import_lang("Japanese.lang")  # 已匯入，才不會被「是否匯入」的詢問擋下來
+    i = _edit_cancel_row(win)
+    win.answers.append(QMessageBox.No)
+    win.set_pair("Japanese.lang", "Taiwan.lang")
+    assert win.master_name == "Chinese.lang"
+    assert win.model.modified_count() == 1 and win.model.slave_text(i) == "&取消X"
+
+
+def test_slave_change_asks_before_discarding_edits(win):
+    i = _edit_cancel_row(win)
+    win.answers.append(QMessageBox.No)
+    win.set_pair("Chinese.lang", "Japanese.lang")
+    assert win.slave_name == "Taiwan.lang"
+    assert win.model.modified_count() == 1 and win.model.slave_text(i) == "&取消X"
+
+
+def test_close_asks_when_edits_pending(win):
+    _edit_cancel_row(win)
+    win.answers.append(QMessageBox.No)
+    ev = QCloseEvent()
+    win.closeEvent(ev)
+    assert not ev.isAccepted()
+    win.answers.append(QMessageBox.Yes)
+    ev = QCloseEvent()
+    win.closeEvent(ev)
+    assert ev.isAccepted()
