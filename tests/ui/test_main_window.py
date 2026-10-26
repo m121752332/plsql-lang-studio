@@ -198,6 +198,22 @@ def test_malformed_txt_at_open_is_backed_up_and_replaced(qtbot, env):
     assert any(k.get("error") is True and "backup" in a[1] for a, k in calls)
 
 
+@pytest.mark.parametrize("garbage", [b"garbage", b""])
+def test_garbage_txt_at_open_never_reaches_slave(qtbot, env, garbage):
+    """亂碼或空白的 .txt 不能變成副語系，否則存檔會把語言檔蓋成空檔。"""
+    root, _ = env
+    _open(qtbot, root).close()
+    lang_before = (root / "lang" / "Taiwan.lang").read_bytes()
+    (root / "txt" / "Taiwan.txt").write_bytes(garbage)
+    calls = []
+    w = _open(qtbot, root, calls)
+    assert w.model.rowCount() == 6672
+    assert all(r.s_index is not None for r in w.model.rows)
+    assert any(k.get("error") is True for _a, k in calls)
+    assert w.save()
+    assert (root / "lang" / "Taiwan.lang").read_bytes() == lang_before
+
+
 def test_reimport_shows_installed_text(win, env):
     root, installed = env
     lf = langfile.load(installed / "Taiwan.lang")

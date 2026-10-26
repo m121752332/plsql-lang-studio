@@ -209,8 +209,24 @@ class Workspace:
         """讀取被記事本修改過的 .txt。非 UTF-8 拋出 UnicodeDecodeError，格式錯誤拋出 LangFormatError。"""
         raw = self.txt_path(name).read_bytes()
         lf = langfile.parse(langcrypt.normalize_text(raw))
+        self._check_same_structure(lf, self.load(name))
         self._txt_hash[name] = _hash(raw)
         return lf
+
+    @staticmethod
+    def _check_same_structure(lf: LangFile, ref: LangFile) -> None:
+        """記事本只能改翻譯：檔頭與筆的識別碼必須跟 .lang 完全相同（ADR-0008 規則 3）。
+        否則亂碼或刪掉整筆的 .txt 會被當成正本，存檔後語言檔就少了內容。"""
+        if not lf.entries:
+            raise langfile.LangFormatError(1, "找不到任何一筆翻譯資料，檔案可能已損毀")
+        if lf.header != ref.header:
+            raise langfile.LangFormatError(1, "檔頭（前幾行 : 開頭的資訊）不可修改")
+        keys, ref_keys = {e.key for e in lf.entries}, {e.key for e in ref.entries}
+        if keys != ref_keys:
+            missing, extra = ref_keys - keys, keys - ref_keys
+            detail = (f"少了 {len(missing)} 筆，例如 {'.'.join(next(iter(missing)))}" if missing
+                      else f"多了 {len(extra)} 筆，例如 {'.'.join(next(iter(extra)))}")
+            raise langfile.LangFormatError(1, f"筆的組成跟語言檔不同：{detail}。只能修改翻譯，不能新增或刪除筆")
 
     # ---------- 部署 ----------
 

@@ -88,6 +88,35 @@ def test_txt_broken_format_rejected(ws):
         ws.load_txt("Taiwan.lang")
 
 
+def test_txt_garbage_rejected(ws):
+    """沒有任何旗標行的 .txt 會被解析成空的語言檔，必須拒絕，不能進入正本。"""
+    ws.import_lang("Taiwan.lang")
+    ws.txt_path("Taiwan.lang").write_bytes(b"garbage")
+    with pytest.raises(LangFormatError):
+        ws.load_txt("Taiwan.lang")
+
+
+def test_txt_with_deleted_entry_rejected(ws):
+    """在記事本整筆刪掉（行數仍正確）會讓那筆在存檔時消失，必須拒絕。"""
+    ws.import_lang("Taiwan.lang")
+    p = ws.txt_path("Taiwan.lang")
+    lines = p.read_bytes().split(b"\r\n")
+    flags = [k for k, line in enumerate(lines) if line.startswith(b"||")]
+    del lines[flags[1]:flags[2]]  # 刪掉第 2 筆整筆
+    p.write_bytes(b"\r\n".join(lines))
+    with pytest.raises(LangFormatError) as err:
+        ws.load_txt("Taiwan.lang")
+    assert "少了" in str(err.value)
+
+
+def test_txt_with_changed_header_rejected(ws):
+    ws.import_lang("Taiwan.lang")
+    p = ws.txt_path("Taiwan.lang")
+    p.write_bytes(p.read_bytes().replace(b":Taiwan", b":Other", 1))
+    with pytest.raises(LangFormatError):
+        ws.load_txt("Taiwan.lang")
+
+
 def test_txt_non_utf8_rejected(ws):
     ws.import_lang("Taiwan.lang")
     ws.txt_path("Taiwan.lang").write_bytes("中文".encode("big5"))
