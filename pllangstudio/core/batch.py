@@ -46,5 +46,5 @@ def preview_replace(rows, master, slave, find: str, replace: str,
 
 
 def preview_s2twp(rows, master, slave) -> list[Change]:
-    """把 MASTER 的文字轉成台灣繁體填入 SLAVE；MASTER 沒有這筆時保持不變。"""
+    """把主語系的文字轉成台灣繁體填入副語系；主語系沒有這筆時保持不變。"""
     return preview(rows, master, slave, lambda r, s, m: s if m is None else convert.s2twp(m))

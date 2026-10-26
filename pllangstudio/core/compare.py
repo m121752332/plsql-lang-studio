@@ -1,4 +1,4 @@
-"""依識別碼對齊 MASTER 與 SLAVE（見 ADR-0002、0003、0007）。"""
+"""依識別碼對齊主語系與副語系（見 ADR-0002、0003、0007）。"""
 
 from __future__ import annotations
 

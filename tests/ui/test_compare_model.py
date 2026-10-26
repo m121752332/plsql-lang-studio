@@ -77,7 +77,7 @@ def test_filter_by_status_and_search(model):
     f.set_status(None)
     f.set_search("tablespace", "英文")
     assert 0 < f.rowCount() < 200
-    f.set_search("取消后", "SLAVE")
+    f.set_search("取消后", "副語系")
     assert f.rowCount() == 1
 
 
@@ -90,7 +90,7 @@ def hu_model(qtbot):
 
 def test_request_edit_rejects_row_without_slave(hu_model):
     i = next(i for i, r in enumerate(hu_model.rows) if r.s_index is None)
-    with pytest.raises(ValueError, match="沒有 SLAVE"):
+    with pytest.raises(ValueError, match="沒有副語系"):
         hu_model.request_edit([(i, "改")], "測試")
     assert hu_model.undo_stack.count() == 0
 

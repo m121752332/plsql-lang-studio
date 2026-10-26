@@ -69,7 +69,7 @@ class PreviewDialog(QDialog):
 class ReplaceDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("在 SLAVE 中尋找取代")
+        self.setWindowTitle("在副語系中尋找取代")
         self.find = QLineEdit()
         self.replace = QLineEdit()
         self.regex = QCheckBox("規則運算式")

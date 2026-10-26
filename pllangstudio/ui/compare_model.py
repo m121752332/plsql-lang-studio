@@ -5,22 +5,17 @@ from __future__ import annotations
 from collections import Counter
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt, Signal
-from PySide6.QtGui import QBrush, QColor
-from PySide6.QtGui import QUndoStack
+from PySide6.QtGui import QBrush, QColor, QUndoStack
 
 from ..core import compare
-from ..core.compare import STATUS_LABEL, Row, Status
+from ..core.compare import STATUS_LABEL, Status
 from ..core.langfile import FIELD_LABEL, LangFile, check_line
+from . import theme
 
-COLUMNS = ["#", "狀態", "識別碼", "欄位", "英文", "MASTER", "SLAVE"]
+COLUMNS = ["#", "狀態", "識別碼", "欄位", "英文", "主語系", "副語系"]
 COL_NO, COL_STATUS, COL_KEY, COL_FIELD, COL_SOURCE, COL_MASTER, COL_SLAVE = range(7)
 STATUS_ORDER = [Status.ERROR, Status.MODIFIED, Status.SIMPLIFIED, Status.UNTRANSLATED,
                 Status.ONE_SIDED, Status.WARNING, Status.DIFFERENT]
-COLORS = {
-    Status.ERROR: "#f8d0d0", Status.MODIFIED: "#d6e6ff", Status.SIMPLIFIED: "#ffd6d6",
-    Status.UNTRANSLATED: "#ffe2bf", Status.ONE_SIDED: "#e4e4e4", Status.DIFFERENT: "#fff6c8",
-}
-GROUP_SHADE = ("#ffffff", "#f5f7fa")
 
 
 def one_line(text: str | None) -> str:
@@ -35,7 +30,7 @@ class CompareModel(QAbstractTableModel):
         self.undo_stack = undo_stack
         self.master: LangFile | None = None
         self.slave: LangFile | None = None
-        self.rows: list[Row] = []
+        self.rows: list[compare.Row] = []
         self.original: list[str | None] = []
         self.status: list[set[Status]] = []
         self.issues: list[list] = []
@@ -116,7 +111,7 @@ class CompareModel(QAbstractTableModel):
         for i, new in edits:
             r = self.rows[i]
             if r.s_index is None:
-                raise ValueError(f"第 {i + 1} 列不能修改：沒有 SLAVE 的翻譯")
+                raise ValueError(f"第 {i + 1} 列不能修改：沒有副語系的翻譯")
             try:
                 if r.item is None:
                     for line in (new.split("\n") if new else []):
@@ -139,7 +134,7 @@ class CompareModel(QAbstractTableModel):
         for i, text in pairs:
             r = self.rows[i]
             compare.set_text(self.slave, r.s_index, r.field, r.item, text)
-            # 同一個 SLAVE 條目的其他列也可能受影響（多行欄位），一起重算
+            # 同一個副語系條目的其他列也可能受影響（多行欄位），一起重算
             touched.update(self._entry_rows[r.s_index])
         for j in touched:
             self.status[j], self.issues[j] = self._compute(j)
@@ -194,15 +189,21 @@ class CompareModel(QAbstractTableModel):
             if col in (COL_SOURCE, COL_MASTER, COL_SLAVE):
                 return {COL_SOURCE: r.source, COL_MASTER: self.master_text(i), COL_SLAVE: self.slave_text(i)}[col]
         if role == Qt.BackgroundRole:
+            c = theme.colors()
             if col in (COL_STATUS, COL_SLAVE):
                 for s in STATUS_ORDER:
-                    if s in st and s in COLORS:
-                        return QBrush(QColor(COLORS[s]))
+                    if s in st and s in c.status:
+                        return QBrush(QColor(c.status[s]))
             key_index = r.s_index if r.s_index is not None else r.m_index
-            return QBrush(QColor(GROUP_SHADE[key_index % 2]))
+            return QBrush(QColor(c.group[key_index % 2]))
         if role == Qt.ForegroundRole and col == COL_MASTER:
-            return QBrush(QColor("#555555"))
+            return QBrush(QColor(theme.colors().master_fg))
         return None
+
+    def refresh_colors(self) -> None:
+        """主題切換後重畫所有列。"""
+        if self.rows:
+            self.dataChanged.emit(self.index(0, 0), self.index(len(self.rows) - 1, len(COLUMNS) - 1))
 
     def flags(self, index):
         base = Qt.ItemIsEnabled | Qt.ItemIsSelectable
@@ -222,7 +223,7 @@ class CompareModel(QAbstractTableModel):
 
 class CompareFilter(QSortFilterProxyModel):
     SCOPES = {"全部": (COL_KEY, COL_SOURCE, COL_MASTER, COL_SLAVE), "英文": (COL_SOURCE,),
-              "MASTER": (COL_MASTER,), "SLAVE": (COL_SLAVE,), "識別碼": (COL_KEY,)}
+              "主語系": (COL_MASTER,), "副語系": (COL_SLAVE,), "識別碼": (COL_KEY,)}
 
     def __init__(self, parent=None):
         super().__init__(parent)

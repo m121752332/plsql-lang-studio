@@ -45,7 +45,7 @@ def test_hungarian_one_sided_rows(zh):
     rows = compare.align(zh, hu)
     one = [r for r in rows if r.m_index is None or r.s_index is None]
     assert one and all(compare.row_status(r, zh, hu, None)[0] >= {Status.ONE_SIDED} for r in one)
-    assert sum(r.s_index is None for r in rows) > 0  # 只有 MASTER 有的筆也要出現
+    assert sum(r.s_index is None for r in rows) > 0  # 只有主語系有的筆也要出現
 
 
 def test_status_different_and_modified(rows, zh, tw):

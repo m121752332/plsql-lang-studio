@@ -17,7 +17,7 @@ from pllangstudio.ui.glossary_dialog import GlossaryDialog
 def test_diff_html_marks_changes_and_simplified():
     h = diff_html("定义", "定后", [])
     assert "定" in h and "ff8080" in h  # 「后」是簡體字，標紅底
-    assert "ffd7d7" in h  # MASTER 的「义」被標成差異
+    assert "ffd7d7" in h  # 主語系的「义」被標成差異
 
 
 def test_preview_dialog_unchecked_rows_are_excluded(qtbot):

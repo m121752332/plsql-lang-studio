@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QLabel, Q
 
 from ..core.glossary import Glossary, Rule
 
-APPLY = 2  # 自訂的 done() 結果：儲存並套用到 SLAVE
+APPLY = 2  # 自訂的 done() 結果：儲存並套用到副語系
 
 
 class GlossaryDialog(QDialog):
@@ -38,7 +38,7 @@ class GlossaryDialog(QDialog):
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Save).setText("儲存")
-        apply_btn = buttons.addButton("儲存並套用到 SLAVE…", QDialogButtonBox.ActionRole)
+        apply_btn = buttons.addButton("儲存並套用到副語系…", QDialogButtonBox.ActionRole)
         apply_btn.clicked.connect(lambda: self.done(APPLY))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

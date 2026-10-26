@@ -1,18 +1,19 @@
-"""主視窗：工具列、檔案清單、對照表格、詳細區、狀態列。"""
+"""主視窗：選單列、工具列、檔案清單、對照表格、詳細區、狀態列。"""
 
 from __future__ import annotations
 
+import os
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QUndoStack
-from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QButtonGroup, QComboBox,
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QUndoStack
+from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QButtonGroup, QComboBox,
                                QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
                                QSplitter, QTableView, QToolButton, QVBoxLayout, QWidget)
 
-from .. import appconfig, elevate
+from .. import __version__, appconfig, elevate
 from ..core import batch, compare, langfile
 from ..core.compare import STATUS_LABEL, Status
 from ..core.langfile import LangFormatError
@@ -23,6 +24,7 @@ from .compare_model import COL_FIELD, COL_KEY, COL_MASTER, COL_NO, COL_SLAVE, CO
 from .detail_panel import DetailPanel
 from .file_panel import FilePanel
 from .glossary_dialog import APPLY, GlossaryDialog
+from .theme import MODE_LABEL, ThemeManager
 
 FILTERS = [(None, "全部"), (Status.DIFFERENT, None), (Status.SIMPLIFIED, None), (Status.UNTRANSLATED, None),
            (Status.ONE_SIDED, None), (Status.ERROR, None), (Status.WARNING, None), (Status.MODIFIED, None)]
@@ -41,8 +43,10 @@ class CompareTable(QTableView):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None):
+    def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None,
+                 theme_manager: ThemeManager | None = None):
         super().__init__()
+        self.theme = theme_manager or ThemeManager(QApplication.instance(), parent=self)
         self.elevate_fn = elevate_fn
         self.ask = ask or self._ask  # 測試時可以換掉對話框
         self.info = info or self._info
@@ -70,27 +74,16 @@ class MainWindow(QMainWindow):
     # ---------- 畫面 ----------
 
     def _build_ui(self) -> None:
+        self._build_actions()
+        self._build_menus()
         tb = self.addToolBar("主要")
         tb.setMovable(False)
         self.ws_label = QLabel()
         tb.addWidget(self.ws_label)
-        tb.addAction("切換…", self.choose_workspace)
-        tb.addAction("PL/SQL 目錄…", self.choose_plsql_dir)
+        tb.addAction(self.act["workspace"])
         tb.addSeparator()
-        self._action(tb, "💾 加密存檔", self.save, QKeySequence.Save)
-        self._action(tb, "🚀 部署", self.deploy)
-        self._action(tb, "📝 記事本", self.open_notepad)
-        tb.addSeparator()
-        undo = self.undo_stack.createUndoAction(self, "復原")
-        undo.setShortcut(QKeySequence.Undo)
-        redo = self.undo_stack.createRedoAction(self, "重做")
-        redo.setShortcut(QKeySequence("Ctrl+Y"))
-        tb.addAction(undo)
-        tb.addAction(redo)
-        tb.addSeparator()
-        self._action(tb, "🔍 尋找取代", self.find_replace, QKeySequence("Ctrl+H"))
-        self._action(tb, "簡→繁", self.convert_s2twp)
-        self._action(tb, "📖 用語表", self.edit_glossary)
+        for name in ("save", "deploy", "notepad", None, "undo", "redo", None, "replace", "s2twp", "glossary"):
+            tb.addSeparator() if name is None else tb.addAction(self.act[name])
 
         self.files = FilePanel()
         self.files.setMaster.connect(lambda n: self.set_pair(n, self.slave_name))
@@ -103,11 +96,11 @@ class MainWindow(QMainWindow):
         self.master_combo.activated.connect(lambda: self.set_pair(self.master_combo.currentText(), self.slave_name))
         self.slave_combo.activated.connect(lambda: self.set_pair(self.master_name, self.slave_combo.currentText()))
         pick = QHBoxLayout()
-        pick.addWidget(QLabel("MASTER"))
+        pick.addWidget(QLabel("主語系"))
         pick.addWidget(self.master_combo)
         pick.addWidget(QLabel("🔒 唯讀"))
         pick.addSpacing(30)
-        pick.addWidget(QLabel("SLAVE"))
+        pick.addWidget(QLabel("副語系"))
         pick.addWidget(self.slave_combo)
         pick.addStretch()
 
@@ -130,15 +123,6 @@ class MainWindow(QMainWindow):
         self.scope.addItems(list(CompareFilter.SCOPES))
         self.search.textChanged.connect(self._apply_search)
         self.scope.currentTextChanged.connect(self._apply_search)
-        find_act = QAction(self)
-        find_act.setShortcut(QKeySequence.Find)
-        find_act.triggered.connect(self.search.setFocus)
-        self.addAction(find_act)
-        for key, step in (("F3", 1), ("Shift+F3", -1)):
-            a = QAction(self)
-            a.setShortcut(QKeySequence(key))
-            a.triggered.connect(lambda _=False, s=step: self.jump_different(s))
-            self.addAction(a)
         flt.addWidget(self.search, 1)
         flt.addWidget(self.scope)
 
@@ -158,6 +142,8 @@ class MainWindow(QMainWindow):
         self.detail.applyRequested.connect(lambda i, t: self.apply_edits([(i, t)], "編輯字串"))
         self.undo_stack.indexChanged.connect(lambda *_: self._show_detail())
         self.model.countsChanged.connect(self._update_counts)
+        self.theme.changed.connect(self.model.refresh_colors)
+        self.theme.changed.connect(self.detail.refresh_colors)
 
         center = QWidget()
         lay = QVBoxLayout(center)
@@ -180,11 +166,72 @@ class MainWindow(QMainWindow):
             self.statusBar().addWidget(w)
             self.statusBar().addWidget(QLabel("｜"))
 
-    def _action(self, tb, text, slot, shortcut=None) -> QAction:
-        a = tb.addAction(text, slot)
-        if shortcut:
-            a.setShortcut(shortcut)
-        return a
+    def _build_actions(self) -> None:
+        """選單與工具列共用同一組動作，快速鍵只註冊一次。"""
+        def make(key, text, slot, shortcut=None):
+            a = QAction(text, self)
+            a.triggered.connect(lambda _=False: slot())
+            if shortcut:
+                a.setShortcut(QKeySequence(shortcut))
+            self.act[key] = a
+
+        self.act: dict[str, QAction] = {}
+        make("workspace", "切換工作區…", self.choose_workspace)
+        make("plsql_dir", "PL/SQL 語言目錄…", self.choose_plsql_dir)
+        make("save", "💾 加密存檔", self.save, QKeySequence.Save)
+        make("deploy", "🚀 部署到 PL/SQL Developer…", self.deploy)
+        make("notepad", "📝 用記事本開啟副語系", self.open_notepad)
+        make("open_ws", "開啟工作區資料夾", lambda: os.startfile(self.ws.root))
+        make("quit", "結束", self.close, "Alt+F4")
+        undo = self.undo_stack.createUndoAction(self, "復原")
+        undo.setShortcut(QKeySequence.Undo)
+        redo = self.undo_stack.createRedoAction(self, "重做")
+        redo.setShortcut(QKeySequence("Ctrl+Y"))
+        self.act["undo"], self.act["redo"] = undo, redo
+        make("find", "尋找", lambda: self.search.setFocus(), QKeySequence.Find)
+        make("next_diff", "下一個不同", lambda: self.jump_different(1), "F3")
+        make("prev_diff", "上一個不同", lambda: self.jump_different(-1), "Shift+F3")
+        make("replace", "🔍 尋找取代…", self.find_replace, "Ctrl+H")
+        make("s2twp", "簡→繁（主語系 → 副語系）", self.convert_s2twp)
+        make("glossary", "📖 用語對照表…", self.edit_glossary)
+        make("help", "使用說明", self.show_help, "F1")
+        make("about", "關於 PLLangStudio", self.show_about)
+        self.theme_group = QActionGroup(self)
+        for mode, label in MODE_LABEL.items():
+            a = QAction(label, self, checkable=True)
+            a.setChecked(self.theme.mode == mode)
+            a.triggered.connect(lambda _=False, m=mode: self.theme.set_mode(m))
+            self.theme_group.addAction(a)
+            self.act[f"theme_{mode}"] = a
+
+    def _build_menus(self) -> None:
+        bar = self.menuBar()
+        file_menu = bar.addMenu("檔案(&F)")
+        for name in ("workspace", "plsql_dir", None, "save", "deploy", None, "notepad", "open_ws", None, "quit"):
+            file_menu.addSeparator() if name is None else file_menu.addAction(self.act[name])
+        edit_menu = bar.addMenu("編輯(&E)")
+        for name in ("undo", "redo", None, "find", "next_diff", "prev_diff", "replace", None, "s2twp", "glossary", None):
+            edit_menu.addSeparator() if name is None else edit_menu.addAction(self.act[name])
+        theme_menu = edit_menu.addMenu("主題")
+        for mode in MODE_LABEL:
+            theme_menu.addAction(self.act[f"theme_{mode}"])
+        about_menu = bar.addMenu("關於(&A)")
+        about_menu.addAction(self.act["help"])
+        about_menu.addAction(self.act["about"])
+
+    def show_help(self) -> None:
+        self.info("使用說明", (
+            "1. 主語系（唯讀）是比對的基準，副語系是要修改的語言檔；可以用上方下拉選單或左側清單切換。\n"
+            "2. 在表格的副語系欄雙擊或按 F2 修改；多行字串在下方詳細區修改後按「套用」。\n"
+            "3. 批次修改：編輯 ▸ 尋找取代、簡→繁、用語對照表，套用前都會先預覽。\n"
+            "4. Ctrl+S 加密存檔（只寫工作區），確認無誤後 檔案 ▸ 部署到 PL/SQL Developer，重新啟動 PL/SQL Developer 生效。\n"
+            "5. 也可以用記事本修改副語系的 .txt，存檔後會自動載入；只能改翻譯，不能新增或刪除筆。\n\n"
+            "快速鍵：Ctrl+S 存檔、Ctrl+Z／Ctrl+Y 復原重做、Ctrl+F 尋找、Ctrl+H 尋找取代、F3／Shift+F3 下一個／上一個不同。"))
+
+    def show_about(self) -> None:
+        QMessageBox.about(self, "關於 PLLangStudio", (
+            f"<b>PLLangStudio {__version__}</b><br>PL/SQL Developer 語言編輯與比對器<br><br>"
+            f"工作區：{self.ws.root}<br>PL/SQL 語言目錄：{self.ws.settings.plsql_lang_dir or '（未設定）'}"))
 
     def _ask(self, title: str, text: str, buttons=QMessageBox.Yes | QMessageBox.No,
              default=QMessageBox.No) -> QMessageBox.StandardButton:
@@ -277,7 +324,7 @@ class MainWindow(QMainWindow):
         self.import_lang(name)
         return (self.ws.lang_dir / name).exists()
 
-    # ---------- MASTER／SLAVE ----------
+    # ---------- 主語系／副語系 ----------
 
     def confirm_discard(self) -> bool:
         if self.model.modified_count() == 0:
@@ -501,7 +548,7 @@ class MainWindow(QMainWindow):
     def convert_s2twp(self) -> None:
         selected = {self.proxy.mapToSource(i).row() for i in self.table.selectionModel().selectedRows()}
         rows = [self.model.rows[i] for i in sorted(selected)] if len(selected) > 1 else self.model.rows
-        self._apply_changes("簡轉繁（MASTER → SLAVE）", batch.preview_s2twp(rows, self.model.master, self.model.slave))
+        self._apply_changes("簡轉繁（主語系 → 副語系）", batch.preview_s2twp(rows, self.model.master, self.model.slave))
 
     def edit_glossary(self) -> None:
         with self._working():

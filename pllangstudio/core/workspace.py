@@ -194,7 +194,7 @@ class Workspace:
         return self.backup(self.txt_path(name))
 
     def sync_txt(self, name: str, lf: LangFile) -> None:
-        """編輯器開啟 SLAVE 時呼叫：讓 .txt 與程式內的正本一致。"""
+        """編輯器開啟副語系時呼叫：讓 .txt 與程式內的正本一致。"""
         self.write_txt(name, langfile.serialize(lf))
 
     def txt_changed(self, name: str) -> bool:

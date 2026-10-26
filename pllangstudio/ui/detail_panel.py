@@ -1,4 +1,4 @@
-"""下方詳細區：元件路徑、說明註解、字元級差異、SLAVE 多行編輯。"""
+"""下方詳細區：元件路徑、說明註解、字元級差異、副語系多行編輯。"""
 
 from __future__ import annotations
 
@@ -11,26 +11,28 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
 
 from ..core.langfile import FIELD_LABEL
 from ..core.validate import simplified_spans
+from . import theme
 
 
 def diff_html(master: str, slave: str, exceptions: list[str]) -> str:
-    """MASTER 與 SLAVE 的字元級差異；SLAVE 的殘留簡體字標紅底。"""
+    """主語系與副語系的字元級差異；副語系的殘留簡體字標紅底。顏色依目前主題。"""
+    c = theme.colors()
     red = {a for a, _ in simplified_spans(slave, exceptions)}
     m_out, s_out = [], []
     sm = difflib.SequenceMatcher(None, master, slave, autojunk=False)
     for op, a1, a2, b1, b2 in sm.get_opcodes():
         m_part = html.escape(master[a1:a2])
-        m_out.append(m_part if op == "equal" else f'<span style="background:#ffd7d7">{m_part}</span>')
+        m_out.append(m_part if op == "equal" else f'<span style="background:{c.diff_removed}">{m_part}</span>')
         for k in range(b1, b2):
             ch = html.escape(slave[k])
             if k in red:
-                s_out.append(f'<span style="background:#ff8080;color:white">{ch}</span>')
+                s_out.append(f'<span style="background:{c.simplified_bg};color:{c.simplified_fg}">{ch}</span>')
             elif op != "equal":
-                s_out.append(f'<span style="background:#d7f5d7">{ch}</span>')
+                s_out.append(f'<span style="background:{c.diff_added}">{ch}</span>')
             else:
                 s_out.append(ch)
     br = lambda s: "".join(s).replace("\n", "<br>")
-    return (f"<b>MASTER：</b>{br(m_out)}<br><b>SLAVE&nbsp;&nbsp;：</b>{br(s_out)}")
+    return (f"<b>主語系：</b>{br(m_out)}<br><b>副語系：</b>{br(s_out)}")
 
 
 class DetailPanel(QWidget):
@@ -43,7 +45,7 @@ class DetailPanel(QWidget):
         self.path.setWordWrap(True)
         self.comments = QLabel()
         self.comments.setWordWrap(True)
-        self.comments.setStyleSheet("color:#666")
+        self.comments.setStyleSheet(f"color:{theme.colors().comment_fg}")
         self.diff = QTextBrowser()
         self.diff.setMaximumHeight(90)
         self.editor = QPlainTextEdit()
@@ -66,6 +68,13 @@ class DetailPanel(QWidget):
             lay.addWidget(w)
         lay.addLayout(edit_row)
         self.show_row(None, None)
+
+    def refresh_colors(self) -> None:
+        """主題切換後重畫說明與差異標色（編輯框裡尚未套用的文字保留）。"""
+        self.comments.setStyleSheet(f"color:{theme.colors().comment_fg}")
+        if self.row is not None:
+            self.diff.setHtml(diff_html(self.model.master_text(self.row) or "", self.model.slave_text(self.row) or "",
+                                        self.model.exceptions))
 
     def show_row(self, model, i: int | None) -> None:
         self.model, self.row = model, i
