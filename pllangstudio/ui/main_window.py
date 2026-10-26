@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, Qt, QTimer
@@ -51,12 +51,21 @@ class MainWindow(QMainWindow):
         self.proxy = CompareFilter(self)
         self.proxy.setSourceModel(self.model)
         self.master_name = self.slave_name = ""
+        self._busy = 0  # 對話框或長操作進行中，poll_txt 先不要插手
         self.resize(1400, 860)
         self._build_ui()
         self.open_workspace(workspace_root)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll_txt)
         self.timer.start(1000)
+
+    @contextmanager
+    def _working(self):
+        self._busy += 1
+        try:
+            yield
+        finally:
+            self._busy -= 1
 
     # ---------- 畫面 ----------
 
@@ -196,16 +205,20 @@ class MainWindow(QMainWindow):
         names = {i.name for i in self.ws.list_workspace()}
         for n in (self.ws.settings.master, self.ws.settings.slave):  # 第一次使用：自動匯入預設的兩個檔案
             if n not in names and (self.ws.installed_dir / n).exists():
-                self.ws.import_lang(n)
+                try:
+                    self.ws.import_lang(n)
+                except (OSError, ValueError) as e:
+                    self.info("無法匯入", f"{n}\n\n{e}", error=True)
         self.master_name = self.slave_name = ""
         self.set_pair(self.ws.settings.master, self.ws.settings.slave, confirm=False)
 
     def choose_workspace(self) -> None:
-        if not self.confirm_discard():
-            return
-        d = QFileDialog.getExistingDirectory(self, "選擇工作區資料夾", str(self.ws.root))
-        if d:
-            self.open_workspace(Path(d))
+        with self._working():
+            if not self.confirm_discard():
+                return
+            d = QFileDialog.getExistingDirectory(self, "選擇工作區資料夾", str(self.ws.root))
+            if d:
+                self.open_workspace(Path(d))
 
     def choose_plsql_dir(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "選擇 PL/SQL Developer 的 Languages 目錄",
@@ -228,17 +241,30 @@ class MainWindow(QMainWindow):
         self.st_deploy.setText("已部署" if deployed else "工作區有尚未部署的修改")
 
     def import_lang(self, name: str) -> None:
+        with self._working():
+            self._import_lang(name)
+
+    def _import_lang(self, name: str) -> None:
+        is_open = name in (self.master_name, self.slave_name)
+        if is_open and not self.confirm_discard():
+            return
         try:
-            self.ws.import_lang(name)
-        except ImportConflict:
-            if self.ask("工作區已有同名檔", f"工作區的 {name} 跟 PL/SQL Developer 裡的不同。\n要覆蓋嗎？（舊檔會先備份）") \
-                    != QMessageBox.Yes:
-                return
-            self.ws.import_lang(name, overwrite=True)
-        except (LangFormatError, ValueError) as e:
+            try:
+                self.ws.import_lang(name)
+            except ImportConflict:
+                if self.ask("工作區已有同名檔", f"工作區的 {name} 跟 PL/SQL Developer 裡的不同。\n要覆蓋嗎？（舊檔會先備份）") \
+                        != QMessageBox.Yes:
+                    return
+                self.ws.import_lang(name, overwrite=True)
+        except (OSError, ValueError) as e:  # LangFormatError 也是 ValueError
             self.info("無法匯入", f"{name}\n\n{e}", error=True)
             return
-        self.refresh_files()
+        if is_open:  # 正在看的檔案被換掉了，強制重新載入
+            master, slave = self.master_name, self.slave_name
+            self.master_name = self.slave_name = ""
+            self.set_pair(master, slave, confirm=False)
+        else:
+            self.refresh_files()
 
     def _ensure_imported(self, name: str) -> bool:
         if (self.ws.lang_dir / name).exists():
@@ -283,8 +309,23 @@ class MainWindow(QMainWindow):
         self.master_name, self.slave_name = master, slave
         self.ws.settings.master, self.ws.settings.slave = master, slave
         self.ws.save_settings()
-        self.model.load(m, s, self.ws.load_glossary().simplified_exceptions)
-        self.ws.sync_txt(slave, s)
+        exceptions = self.ws.load_glossary().simplified_exceptions
+        if self.ws.txt_differs(slave, s):  # ADR-0008 規則 2：程式關閉時在記事本改的內容不能被蓋掉
+            try:
+                new = self.ws.load_txt(slave)
+            except (UnicodeDecodeError, LangFormatError) as e:
+                backup = self.ws.backup_txt(slave)
+                self.model.load(m, s, exceptions)
+                self.ws.sync_txt(slave, s)
+                self.info(".txt 無法讀取，已改用 .lang", f"{slave} 對應的 .txt 讀取失敗：{e}\n\n"
+                          f"原本的 .txt 已備份到：\n{backup}", error=True)
+            else:
+                self.model.load(m, new, exceptions, baseline=s)
+                self.info("已載入記事本的修改", f"{slave} 對應的 .txt 跟 .lang 不同，已載入 .txt 的內容。\n"
+                          "修改標示為 ✎，尚未存檔。")
+        else:
+            self.model.load(m, s, exceptions)
+            self.ws.sync_txt(slave, s)
         self.setWindowTitle(f"PLLangStudio — {master} ↔ {slave}")
         self.refresh_files()
         self.select_row(self.model.row_of_key(key) if key else 0)
@@ -336,6 +377,10 @@ class MainWindow(QMainWindow):
     # ---------- 存檔／部署 ----------
 
     def save(self) -> bool:
+        with self._working():
+            return self._save()
+
+    def _save(self) -> bool:
         errors = self.model.has_errors()
         if errors:
             lines = [f"第 {i + 1} 列：{'；'.join(x.message for x in self.model.issues[i] if x.level == 'error')}"
@@ -349,22 +394,43 @@ class MainWindow(QMainWindow):
         if warnings and self.ask("有警告", f"修改過的字串中有 {warnings} 個有警告（可在「警告」篩選查看）。\n仍要存檔嗎？") \
                 != QMessageBox.Yes:
             return False
-        self.ws.save(self.slave_name, self.model.slave)
+        try:
+            self.ws.save(self.slave_name, self.model.slave)
+        except OSError as e:
+            self.info("存檔失敗", f"{self.slave_name} 沒有存成功：{e}", error=True)
+            return False
         self.model.mark_saved()
         self.refresh_files()
         self.statusBar().showMessage(f"已加密存檔到工作區：{self.slave_name}", 5000)
         return True
 
     def deploy(self) -> None:
-        if self.model.modified_count() and (self.ask("尚未存檔", "要先存檔再部署嗎？") != QMessageBox.Yes or not self.save()):
+        with self._working():
+            self._deploy()
+
+    def _deploy(self) -> None:
+        if self.model.modified_count() and (self.ask("尚未存檔", "要先存檔再部署嗎？") != QMessageBox.Yes or not self._save()):
             return
         target = self.ws.installed_dir / self.slave_name
-        n = compare.count_differences(self.ws.load(self.slave_name), langfile.load(target)) if target.exists() else None
-        text = (f"{self.slave_name} 跟 PL/SQL Developer 裡的版本有 {n} 筆不同。" if n is not None
-                else f"PL/SQL Developer 裡還沒有 {self.slave_name}。")
+        n, unreadable = None, False
+        if target.exists():
+            try:
+                n = compare.count_differences(self.ws.load(self.slave_name), langfile.load(target))
+            except (OSError, ValueError):
+                unreadable = True
+        if n is not None:
+            text = f"{self.slave_name} 跟 PL/SQL Developer 裡的版本有 {n} 筆不同。"
+        elif unreadable:
+            text = f"PL/SQL Developer 裡的 {self.slave_name} 讀不出來（可能已損壞），無法比較差異。"
+        else:
+            text = f"PL/SQL Developer 裡還沒有 {self.slave_name}。"
         if self.ask("部署到 PL/SQL Developer", f"{text}\n\n要部署到：\n{target}\n嗎？（舊檔會先備份）") != QMessageBox.Yes:
             return
-        res = self.ws.deploy(self.slave_name, self.elevate_fn)
+        try:
+            res = self.ws.deploy(self.slave_name, self.elevate_fn)
+        except (OSError, ValueError) as e:
+            self.info("部署失敗", f"{self.slave_name} 沒有部署成功：{e}", error=True)
+            return
         self.info("部署結果", res.message, error=not res.ok)
         self.refresh_files()
 
@@ -377,9 +443,15 @@ class MainWindow(QMainWindow):
         subprocess.Popen(["notepad.exe", str(self.ws.txt_path(name))])
 
     def poll_txt(self) -> None:
+        if self._busy:
+            return
         name = self.slave_name
         if not name or not self.ws.txt_changed(name):
             return
+        with self._working():
+            self._reload_txt(name)
+
+    def _reload_txt(self, name: str) -> None:
         try:
             new = self.ws.load_txt(name)
         except UnicodeDecodeError:
@@ -407,22 +479,24 @@ class MainWindow(QMainWindow):
         if not changes:
             self.info(title, "沒有需要修改的字串。")
             return
-        dlg = PreviewDialog(title, changes, self)
-        if dlg.exec():
-            edits = [(self.model.row_of_ref(c.row.ref), c.after) for c in dlg.checked()]
-            self.apply_edits([e for e in edits if e[0] is not None], title)
+        with self._working():
+            dlg = PreviewDialog(title, changes, self)
+            if dlg.exec():
+                edits = [(self.model.row_of_ref(c.row.ref), c.after) for c in dlg.checked()]
+                self.apply_edits([e for e in edits if e[0] is not None], title)
 
     def find_replace(self) -> None:
-        dlg = ReplaceDialog(self)
-        if dlg.exec() and dlg.find.text():
-            try:
-                changes = batch.preview_replace(self.model.rows, self.model.master, self.model.slave,
-                                                dlg.find.text(), dlg.replace.text(), dlg.regex.isChecked(),
-                                                dlg.case.isChecked())
-            except Exception as e:  # 規則運算式寫錯
-                self.info("尋找取代", f"規則運算式有誤：{e}", error=True)
-                return
-            self._apply_changes("尋找取代", changes)
+        with self._working():
+            dlg = ReplaceDialog(self)
+            if dlg.exec() and dlg.find.text():
+                try:
+                    changes = batch.preview_replace(self.model.rows, self.model.master, self.model.slave,
+                                                    dlg.find.text(), dlg.replace.text(), dlg.regex.isChecked(),
+                                                    dlg.case.isChecked())
+                except Exception as e:  # 規則運算式寫錯
+                    self.info("尋找取代", f"規則運算式有誤：{e}", error=True)
+                    return
+                self._apply_changes("尋找取代", changes)
 
     def convert_s2twp(self) -> None:
         selected = {self.proxy.mapToSource(i).row() for i in self.table.selectionModel().selectedRows()}
@@ -430,15 +504,16 @@ class MainWindow(QMainWindow):
         self._apply_changes("簡轉繁（MASTER → SLAVE）", batch.preview_s2twp(rows, self.model.master, self.model.slave))
 
     def edit_glossary(self) -> None:
-        dlg = GlossaryDialog(self.ws.load_glossary(), self)
-        result = dlg.exec()
-        if result in (1, APPLY):
-            g = dlg.glossary()
-            self.ws.save_glossary(g)
-            self.model.exceptions = g.simplified_exceptions
-            if result == APPLY:
-                self._apply_changes("套用用語表",
-                                    batch.preview_rules(self.model.rows, self.model.master, self.model.slave, g.rules))
+        with self._working():
+            dlg = GlossaryDialog(self.ws.load_glossary(), self)
+            result = dlg.exec()
+            if result in (1, APPLY):
+                g = dlg.glossary()
+                self.ws.save_glossary(g)
+                self.model.exceptions = g.simplified_exceptions
+                if result == APPLY:
+                    self._apply_changes("套用用語表", batch.preview_rules(
+                        self.model.rows, self.model.master, self.model.slave, g.rules))
 
     # ---------- 關閉 ----------
 

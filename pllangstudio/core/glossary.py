@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import langfile
 from .validate import covered
 
 
@@ -45,9 +47,20 @@ def apply_rules(text: str, rules: list[Rule]) -> str:
 
 
 def load(path: Path) -> Glossary:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    rules = [Rule(r["find"], r["replace"], r.get("except", []), r.get("enabled", True)) for r in data["rules"]]
-    return Glossary(rules, data.get("simplified_exceptions", []))
+    """檔案壞了（空檔、JSON 錯誤、欄位缺少）就改名成 .corrupt，改用預設用語表並重新存檔。"""
+    path = Path(path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rules = [Rule(r["find"], r["replace"], r.get("except", []), r.get("enabled", True)) for r in data["rules"]]
+        return Glossary(rules, data.get("simplified_exceptions", []))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        try:
+            os.replace(path, path.with_name(path.name + ".corrupt"))
+        except OSError:
+            pass
+        g = default()
+        save(path, g)
+        return g
 
 
 def save(path: Path, g: Glossary) -> None:
@@ -56,7 +69,7 @@ def save(path: Path, g: Glossary) -> None:
                   for r in g.rules],
         "simplified_exceptions": g.simplified_exceptions,
     }
-    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    langfile.atomic_write(Path(path), json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
 # 2026-10-25～26 手動修正 Taiwan.lang 時確認過的規則與例外，順序有意義：較長的詞排前面。

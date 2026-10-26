@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from .. import appconfig
 from . import glossary, langcrypt, langfile
 from .langfile import LangFile
 
@@ -94,18 +95,22 @@ class Workspace:
     # ---------- 設定 ----------
 
     def _load_settings(self) -> Settings:
+        s = Settings()
         if self.settings_path.exists():
-            data = json.loads(self.settings_path.read_text(encoding="utf-8"))
-            s = Settings(**{k: v for k, v in data.items() if k in Settings.__dataclass_fields__})
-        else:
-            s = Settings()
+            try:
+                data = json.loads(self.settings_path.read_text(encoding="utf-8"))
+                s = Settings(**{k: v for k, v in data.items() if k in Settings.__dataclass_fields__})
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                appconfig.quarantine(self.settings_path)
+                s = Settings()
         if not s.plsql_lang_dir:
             found = find_plsql_lang_dir()
             s.plsql_lang_dir = str(found) if found else ""
         return s
 
     def save_settings(self) -> None:
-        self.settings_path.write_text(json.dumps(asdict(self.settings), ensure_ascii=False, indent=2), encoding="utf-8")
+        text = json.dumps(asdict(self.settings), ensure_ascii=False, indent=2)
+        langfile.atomic_write(self.settings_path, text.encode("utf-8"))
 
     @property
     def installed_dir(self) -> Path:
@@ -152,6 +157,8 @@ class Workspace:
             if not overwrite:
                 raise ImportConflict(name)
             self.backup(dst)
+        if self.txt_path(name).exists() and self._raw_differs(name, plain):
+            self.backup_txt(name)  # 記事本改過的 .txt 不能無聲覆蓋
         langfile.atomic_write(dst, data)
         self.write_txt(name, plain)
 
@@ -172,6 +179,19 @@ class Workspace:
     def write_txt(self, name: str, plain: bytes) -> None:
         langfile.atomic_write(self.txt_path(name), plain)
         self._txt_hash[name] = _hash(plain)
+
+    def _raw_differs(self, name: str, plain: bytes) -> bool:
+        try:
+            return langcrypt.normalize_text(self.txt_path(name).read_bytes()) != plain
+        except UnicodeDecodeError:
+            return True
+
+    def txt_differs(self, name: str, lf: LangFile) -> bool:
+        """.txt 存在而且內容和 lf 不同（例如程式關閉時在記事本改過）。"""
+        return self.txt_path(name).exists() and self._raw_differs(name, langfile.serialize(lf))
+
+    def backup_txt(self, name: str) -> Path:
+        return self.backup(self.txt_path(name))
 
     def sync_txt(self, name: str, lf: LangFile) -> None:
         """編輯器開啟 SLAVE 時呼叫：讓 .txt 與程式內的正本一致。"""
@@ -205,7 +225,11 @@ class Workspace:
         try:
             langfile.atomic_write(dst, data)
         except PermissionError:
-            if not elevate(src, dst):
+            try:
+                ok = elevate(src, dst)
+            except Exception as e:  # 提升權限的過程出任何錯都要變成看得見的失敗
+                return DeployResult(False, False, f"沒有寫入：提升權限時發生錯誤（{e}）。修改仍保留在工作區。", backup)
+            if not ok:
                 return DeployResult(False, False, "沒有寫入：使用者取消了 UAC，或系統管理員複製失敗。修改仍保留在工作區。", backup)
         if not dst.exists() or dst.read_bytes() != data:
             return DeployResult(False, False, f"寫入後讀回的內容不一致。原檔備份在：{backup}", backup)

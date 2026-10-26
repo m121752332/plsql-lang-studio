@@ -1,6 +1,7 @@
 """以系統管理員身分複製檔案（寫入 Program Files 時使用 UAC）。"""
 
 import ctypes
+import os
 from ctypes import wintypes
 from pathlib import Path
 
@@ -21,7 +22,7 @@ def elevated_copy(src: Path, dst: Path) -> bool:
     info.cbSize = ctypes.sizeof(info)
     info.fMask = 0x40  # SEE_MASK_NOCLOSEPROCESS
     info.lpVerb = "runas"
-    info.lpFile = "cmd.exe"
+    info.lpFile = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "cmd.exe")
     info.lpParameters = f'/c copy /y "{src}" "{dst}"'
     info.nShow = 0  # SW_HIDE
     if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):

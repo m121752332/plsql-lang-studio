@@ -109,3 +109,16 @@ def test_save_then_load(lang_copy):
     lf.set_target(1, Field.CAPTION, ["改過"])
     langfile.save(path, lf)
     assert langfile.load(path).entries[1].target[Field.CAPTION] == ["改過"]
+
+
+def test_atomic_write_cleans_tmp_on_failure(tmp_path, monkeypatch):
+    import os
+    target = tmp_path / "a.bin"
+
+    def boom(*a, **k):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError):
+        langfile.atomic_write(target, b"x")
+    assert not list(tmp_path.glob("*.tmp")) and not target.exists()

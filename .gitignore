@@ -8,8 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-build/
-dist/
 *.spec
 temp/
 .idea/

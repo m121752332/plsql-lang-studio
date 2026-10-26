@@ -65,6 +65,14 @@ class Entry:
         return out + self.reserved
 
 
+def check_line(line: str) -> None:
+    """翻譯的單一行不能破壞檔案格式，不合法就拋出 ValueError。"""
+    if "\r" in line or "\n" in line:
+        raise ValueError("翻譯的單一行不能包含換行字元")
+    if line.startswith("||"):
+        raise ValueError("翻譯不能以 || 開頭（會被當成下一筆的旗標）")
+
+
 @dataclass
 class LangFile:
     header: list[str]
@@ -77,10 +85,7 @@ class LangFile:
 
     def set_target(self, index: int, field: Field, lines: list[str]) -> None:
         for line in lines:
-            if "\r" in line or "\n" in line:
-                raise ValueError("翻譯的單一行不能包含換行字元")
-            if line.startswith("||"):
-                raise ValueError("翻譯不能以 || 開頭（會被當成下一筆的旗標）")
+            check_line(line)
         self.entries[index].target[field] = list(lines)
 
 
@@ -147,8 +152,15 @@ def atomic_write(path: Path, data: bytes) -> None:
     """先寫 .tmp 再 os.replace，檔案不是舊的就是新的，不會只寫一半。"""
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def load(path: Path) -> LangFile:

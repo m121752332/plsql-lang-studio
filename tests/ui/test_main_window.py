@@ -160,3 +160,73 @@ def test_close_asks_when_edits_pending(win):
     ev = QCloseEvent()
     win.closeEvent(ev)
     assert ev.isAccepted()
+
+
+def _open(qtbot, root, calls=None):
+    w = MainWindow(root, elevate_fn=lambda s, d: False,
+                   info=(lambda *a, **k: calls.append((a, k))) if calls is not None else (lambda *a, **k: None),
+                   ask=lambda *a, **k: QMessageBox.Yes)
+    qtbot.addWidget(w)
+    return w
+
+
+def test_txt_edited_while_closed_is_loaded_not_overwritten(qtbot, env):
+    root, _ = env
+    first = _open(qtbot, root)
+    first.close()
+    txt = root / "txt" / "Taiwan.txt"
+    txt.write_bytes(txt.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
+    calls = []
+    w = _open(qtbot, root, calls)
+    i = row_of(w, "&取消N")
+    assert Status.MODIFIED in w.model.status[i]
+    assert "&取消N" in txt.read_text(encoding="utf-8-sig")
+    assert any(a[0] == "已載入記事本的修改" for a, _ in calls)
+
+
+def test_malformed_txt_at_open_is_backed_up_and_replaced(qtbot, env):
+    root, _ = env
+    first = _open(qtbot, root)
+    first.close()
+    txt = root / "txt" / "Taiwan.txt"
+    txt.write_bytes(b"||bad")
+    calls = []
+    w = _open(qtbot, root, calls)
+    assert w.model.rowCount() == 6672 and w.model.modified_count() == 0
+    assert [b.read_bytes() for b in (root / "backup").glob("Taiwan_*.txt")] == [b"||bad"]
+    assert txt.read_text(encoding="utf-8-sig").startswith(":Taiwan")
+    assert any(k.get("error") is True and "backup" in a[1] for a, k in calls)
+
+
+def test_reimport_shows_installed_text(win, env):
+    root, installed = env
+    lf = langfile.load(installed / "Taiwan.lang")
+    lf.set_target(0, Field.CAPTION, ["外部新標題"])
+    langfile.save(installed / "Taiwan.lang", lf)
+    win.import_lang("Taiwan.lang")
+    assert any(win.model.slave_text(i) == "外部新標題" for i in range(win.model.rowCount()))
+
+
+def test_save_failure_is_reported(qtbot, env, monkeypatch):
+    root, _ = env
+    calls = []
+    w = _open(qtbot, root, calls)
+
+    def boom(*a, **k):
+        raise OSError("磁碟已滿")
+
+    monkeypatch.setattr(w.ws, "save", boom)
+    assert w.save() is False
+    assert calls and calls[-1][1].get("error") is True and "磁碟已滿" in calls[-1][0][1]
+
+
+def test_poll_txt_skipped_while_busy(win, env):
+    root, _ = env
+    txt = root / "txt" / "Taiwan.txt"
+    txt.write_bytes(txt.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
+    win._busy = 1
+    win.poll_txt()
+    assert win.model.modified_count() == 0
+    win._busy = 0
+    win.poll_txt()
+    assert win.model.modified_count() == 1

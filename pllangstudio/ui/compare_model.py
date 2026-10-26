@@ -10,7 +10,7 @@ from PySide6.QtGui import QUndoStack
 
 from ..core import compare
 from ..core.compare import STATUS_LABEL, Row, Status
-from ..core.langfile import FIELD_LABEL, LangFile
+from ..core.langfile import FIELD_LABEL, LangFile, check_line
 
 COLUMNS = ["#", "狀態", "識別碼", "欄位", "英文", "MASTER", "SLAVE"]
 COL_NO, COL_STATUS, COL_KEY, COL_FIELD, COL_SOURCE, COL_MASTER, COL_SLAVE = range(7)
@@ -117,8 +117,16 @@ class CompareModel(QAbstractTableModel):
             r = self.rows[i]
             if r.s_index is None:
                 raise ValueError(f"第 {i + 1} 列不能修改：沒有 SLAVE 的翻譯")
-            if r.item is not None and "\n" in new:
-                raise ValueError(f"第 {i + 1} 列是單行字串，不能包含換行")
+            try:
+                if r.item is None:
+                    for line in (new.split("\n") if new else []):
+                        check_line(line)
+                else:
+                    if "\n" in new:
+                        raise ValueError("這一列是單行字串，不能包含換行")
+                    check_line(new)
+            except ValueError as e:
+                raise ValueError(f"第 {i + 1} 列不能修改：{e}") from None
         real = [(i, self.slave_text(i), new) for i, new in edits if self.slave_text(i) != new]
         if real:
             self.undo_stack.push(EditCommand(self, real, label))
@@ -205,10 +213,10 @@ class CompareModel(QAbstractTableModel):
     def setData(self, index, value, role=Qt.EditRole):
         if role != Qt.EditRole or not (self.flags(index) & Qt.ItemIsEditable):
             return False
-        text = str(value)
-        if "\n" in text:
+        try:
+            self.request_edit([(index.row(), str(value))], "編輯字串")
+        except ValueError:
             return False
-        self.request_edit([(index.row(), text)], "編輯字串")
         return True
 
 

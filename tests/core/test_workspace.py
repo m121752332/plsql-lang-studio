@@ -133,3 +133,68 @@ def test_deploy_cancelled_uac(ws, monkeypatch):
     monkeypatch.setattr(langfile, "atomic_write", lambda p, d: (_ for _ in ()).throw(PermissionError()))
     res = ws.deploy("Taiwan.lang", elevate=lambda s, d: False)
     assert not res.ok and "工作區" in res.message
+
+
+def test_txt_differs_and_backup(ws):
+    ws.import_lang("Taiwan.lang")
+    lf = ws.load("Taiwan.lang")
+    assert ws.txt_differs("Taiwan.lang", lf) is False
+    p = ws.txt_path("Taiwan.lang")
+    p.write_bytes(p.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
+    assert ws.txt_differs("Taiwan.lang", lf) is True
+    p.write_bytes(b"\xff\xfe\x00bad")
+    assert ws.txt_differs("Taiwan.lang", lf) is True
+    b = ws.backup_txt("Taiwan.lang")
+    assert b.parent == ws.backup_dir and b.read_bytes() == b"\xff\xfe\x00bad"
+
+
+def test_import_overwrite_backs_up_edited_txt(ws, installed):
+    ws.import_lang("Taiwan.lang")
+    p = ws.txt_path("Taiwan.lang")
+    p.write_bytes(p.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
+    edited = p.read_bytes()
+    # 讓 PL/SQL 目錄的版本和工作區的 .lang 不同，才會走到覆蓋流程
+    lf = ws.load("Taiwan.lang")
+    lf.set_target(0, Field.CAPTION, ["x"])
+    langfile.save(ws.lang_dir / "Taiwan.lang", lf)
+    ws.import_lang("Taiwan.lang", overwrite=True)
+    assert any(b.read_bytes() == edited for b in ws.backup_dir.glob("Taiwan_*.txt"))
+
+
+def test_empty_settings_and_glossary_fall_back(tmp_path):
+    root = tmp_path / "ws"
+    root.mkdir()
+    (root / "settings.json").write_text("", encoding="utf-8")
+    (root / "glossary.json").write_text("", encoding="utf-8")
+    w = Workspace(root)
+    assert w.settings.master == "Chinese.lang"
+    assert any(r.find == "會話" for r in w.load_glossary().rules)
+    assert (root / "settings.json.corrupt").exists() and (root / "glossary.json.corrupt").exists()
+
+
+def test_empty_app_json_gives_no_workspace(tmp_path, monkeypatch):
+    from pllangstudio import appconfig
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    d = tmp_path / "PLLangStudio"
+    d.mkdir()
+    (d / "app.json").write_text("", encoding="utf-8")
+    assert appconfig.last_workspace() is None
+    assert (d / "app.json.corrupt").exists()
+
+
+def test_deploy_elevate_exception_is_failed_result(ws, installed, monkeypatch):
+    ws.import_lang("Taiwan.lang")
+    lf = ws.load("Taiwan.lang")
+    lf.set_target(0, Field.CAPTION, ["x"])
+    ws.save("Taiwan.lang", lf)
+
+    def deny(*a, **k):
+        raise PermissionError
+
+    monkeypatch.setattr(langfile, "atomic_write", deny)
+
+    def boom(s, d):
+        raise OSError("炸了")
+
+    res = ws.deploy("Taiwan.lang", boom)
+    assert res.ok is False and "炸了" in res.message

@@ -115,3 +115,18 @@ def test_batch_emits_countschanged_once(model, qtbot):
     model.countsChanged.connect(lambda: counter.append(1))
     model.undo_stack.undo()
     assert len(counter) == 1
+
+
+def test_batch_with_invalid_line_is_rejected_entirely(model):
+    rows = [i for i in range(model.rowCount()) if model.rows[i].item is not None and model.is_editable(i)][:3]
+    before = [model.slave_text(i) for i in rows]
+    with pytest.raises(ValueError, match="列"):
+        model.request_edit([(rows[0], "甲"), (rows[1], "乙"), (rows[2], "||bad")], "測試")
+    assert model.undo_stack.count() == 0
+    assert [model.slave_text(i) for i in rows] == before
+
+
+def test_setdata_returns_false_on_invalid(model):
+    i = find_row(model, "&取消")
+    assert model.setData(model.index(i, COL_SLAVE), "||x") is False
+    assert model.undo_stack.count() == 0
