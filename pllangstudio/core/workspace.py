@@ -162,6 +162,25 @@ class Workspace:
         langfile.atomic_write(dst, data)
         self.write_txt(name, plain)
 
+    def remove_lang(self, name: str) -> Path:
+        """把語言檔從工作區移除（先備份）。只動工作區，不會碰 PL/SQL Developer 的 Languages 目錄。"""
+        src = self.lang_dir / name
+        if not src.exists():
+            raise FileNotFoundError(name)
+        backup = self.backup(src)
+        txt = self.txt_path(name)
+        if txt.exists():
+            try:
+                edited = self._raw_differs(name, langcrypt.decrypt(src.read_bytes()))
+            except ValueError:  # .lang 本身壞了：.txt 一律保留備份
+                edited = True
+            if edited:
+                self.backup_txt(name)  # 記事本改過的內容不能無聲消失
+            txt.unlink()
+        src.unlink()
+        self._txt_hash.pop(name, None)
+        return backup
+
     def load(self, name: str) -> LangFile:
         return langfile.load(self.lang_dir / name)
 

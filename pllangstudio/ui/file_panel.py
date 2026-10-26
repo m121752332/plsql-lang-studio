@@ -36,9 +36,11 @@ class FilePanel(QSplitter):
     importRequested = Signal(str)
     openTxt = Signal(str)
     openFolder = Signal(str)  # 檔案的完整路徑
+    removeRequested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(Qt.Vertical, parent)
+        self.master = self.slave = ""
         self.workspace = _tree(["語言檔", "角色", "已部署"])
         self.installed = _tree(["語言檔", "大小", "日期", "已匯入"])
         self.addWidget(_section("工作區", self.workspace))
@@ -51,10 +53,13 @@ class FilePanel(QSplitter):
         self.installed.itemDoubleClicked.connect(lambda item, _c: self.importRequested.emit(item.text(0)))
 
     def refresh(self, installed: list[LangInfo], workspace: list[LangInfo], master: str, slave: str) -> None:
+        self.master, self.slave = master, slave
         self.workspace.clear()
         for info in workspace:
-            role = "主語系" if info.name == master else ("副語系" if info.name == slave else "")
+            role = "🔒 主語系" if info.name == master else ("副語系" if info.name == slave else "")
             item = QTreeWidgetItem([info.name, role, "✓" if info.deployed else "未部署"])
+            if info.name == master:
+                item.setToolTip(1, "唯讀，只作為比對基準")
             item.setData(0, Qt.UserRole, str(info.path))
             self.workspace.addTopLevelItem(item)
         self.installed.clear()
@@ -73,11 +78,14 @@ class FilePanel(QSplitter):
             return
         name, path = item.text(0), item.data(0, Qt.UserRole)
         menu = QMenu(self)
-        menu.addAction("設為主語系", lambda: self.setMaster.emit(name))
-        menu.addAction("設為副語系", lambda: self.setSlave.emit(name))
+        # 主語系和副語系不能是同一個檔案
+        menu.addAction("設為主語系", lambda: self.setMaster.emit(name)).setEnabled(name != self.slave)
+        menu.addAction("設為副語系", lambda: self.setSlave.emit(name)).setEnabled(name != self.master)
         if installed:
             menu.addAction("匯入工作區", lambda: self.importRequested.emit(name))
         else:
             menu.addAction("用記事本開 .txt", lambda: self.openTxt.emit(name))
+            menu.addAction("從工作區移除…", lambda: self.removeRequested.emit(name)).setEnabled(
+                name not in (self.master, self.slave))
         menu.addAction("開啟所在資料夾", lambda: self.openFolder.emit(path))
         menu.exec(tree.viewport().mapToGlobal(pos))

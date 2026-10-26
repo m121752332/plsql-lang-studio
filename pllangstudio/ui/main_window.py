@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QUndoStack
+from PySide6.QtGui import QAction, QActionGroup, QFontMetrics, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QButtonGroup, QComboBox,
                                QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
                                QSplitter, QTableView, QToolButton, QVBoxLayout, QWidget)
@@ -23,6 +23,8 @@ from .compare_model import COL_FIELD, COL_KEY, COL_MASTER, COL_NO, COL_SLAVE, CO
     CompareFilter, CompareModel
 from .detail_panel import DetailPanel
 from .file_panel import FilePanel
+from .font_dialog import FontDialog
+from .fonts import FontManager
 from .glossary_dialog import APPLY, GlossaryDialog
 from .theme import MODE_LABEL, ThemeManager
 
@@ -44,9 +46,10 @@ class CompareTable(QTableView):
 
 class MainWindow(QMainWindow):
     def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None,
-                 theme_manager: ThemeManager | None = None):
+                 theme_manager: ThemeManager | None = None, font_manager: FontManager | None = None):
         super().__init__()
         self.theme = theme_manager or ThemeManager(QApplication.instance(), parent=self)
+        self.fonts = font_manager or FontManager(QApplication.instance(), parent=self)
         self.elevate_fn = elevate_fn
         self.ask = ask or self._ask  # 測試時可以換掉對話框
         self.info = info or self._info
@@ -91,6 +94,7 @@ class MainWindow(QMainWindow):
         self.files.importRequested.connect(self.import_lang)
         self.files.openTxt.connect(lambda n: self.open_notepad(n))
         self.files.openFolder.connect(lambda p: subprocess.Popen(["explorer", "/select,", p]))
+        self.files.removeRequested.connect(self.remove_lang)
 
         self.master_combo, self.slave_combo = QComboBox(), QComboBox()
         self.master_combo.activated.connect(lambda: self.set_pair(self.master_combo.currentText(), self.slave_name))
@@ -131,7 +135,8 @@ class MainWindow(QMainWindow):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
         self.table.verticalHeader().hide()
-        self.table.verticalHeader().setDefaultSectionSize(22)
+        self._fit_row_height()
+        self.fonts.changed.connect(self._fit_row_height)
         for col, w in ((COL_NO, 50), (COL_STATUS, 50), (COL_KEY, 260), (COL_FIELD, 70),
                        (COL_SOURCE, 260), (COL_MASTER, 260), (COL_SLAVE, 260)):
             self.table.setColumnWidth(col, w)
@@ -166,6 +171,10 @@ class MainWindow(QMainWindow):
             self.statusBar().addWidget(w)
             self.statusBar().addWidget(QLabel("｜"))
 
+    def _fit_row_height(self) -> None:
+        """列高跟著字型走，字放大後才不會被切掉。"""
+        self.table.verticalHeader().setDefaultSectionSize(max(22, QFontMetrics(QApplication.font()).height() + 8))
+
     def _build_actions(self) -> None:
         """選單與工具列共用同一組動作，快速鍵只註冊一次。"""
         def make(key, text, slot, shortcut=None):
@@ -194,6 +203,11 @@ class MainWindow(QMainWindow):
         make("replace", "🔍 尋找取代…", self.find_replace, "Ctrl+H")
         make("s2twp", "簡→繁（主語系 → 副語系）", self.convert_s2twp)
         make("glossary", "📖 用語對照表…", self.edit_glossary)
+        make("font", "字型與大小…", lambda: FontDialog(self.fonts, self).exec())
+        make("font_bigger", "放大字體", lambda: self.fonts.step(1))
+        self.act["font_bigger"].setShortcuts([QKeySequence(QKeySequence.ZoomIn), QKeySequence("Ctrl+=")])  # 不按 Shift 也能放大
+        make("font_smaller", "縮小字體", lambda: self.fonts.step(-1), QKeySequence.ZoomOut)
+        make("font_reset", "還原預設字型", self.fonts.reset, "Ctrl+0")
         make("help", "使用說明", self.show_help, "F1")
         make("about", "關於 PLLangStudio", self.show_about)
         self.theme_group = QActionGroup(self)
@@ -215,6 +229,9 @@ class MainWindow(QMainWindow):
         theme_menu = edit_menu.addMenu("主題")
         for mode in MODE_LABEL:
             theme_menu.addAction(self.act[f"theme_{mode}"])
+        font_menu = edit_menu.addMenu("字型")
+        for name in ("font", None, "font_bigger", "font_smaller", "font_reset"):
+            font_menu.addSeparator() if name is None else font_menu.addAction(self.act[name])
         about_menu = bar.addMenu("關於(&A)")
         about_menu.addAction(self.act["help"])
         about_menu.addAction(self.act["about"])
@@ -250,6 +267,11 @@ class MainWindow(QMainWindow):
             self.info("找不到 PL/SQL Developer", "找不到 PL/SQL Developer 的 Languages 目錄，請手動選擇。")
             self.choose_plsql_dir()
         names = {i.name for i in self.ws.list_workspace()}
+        s = self.ws.settings
+        if s.master == s.slave:  # 設定檔被改成同一個檔案：副語系改用另一個
+            others = sorted((names | {i.name for i in self.ws.list_installed()}) - {s.master})
+            if others:
+                s.slave = others[0]
         for n in (self.ws.settings.master, self.ws.settings.slave):  # 第一次使用：自動匯入預設的兩個檔案
             if n not in names and (self.ws.installed_dir / n).exists():
                 try:
@@ -277,10 +299,13 @@ class MainWindow(QMainWindow):
 
     def refresh_files(self) -> None:
         names = [i.name for i in self.ws.list_workspace()]
-        for combo, cur in ((self.master_combo, self.master_name), (self.slave_combo, self.slave_name)):
+        for combo, cur, other in ((self.master_combo, self.master_name, self.slave_name),
+                                  (self.slave_combo, self.slave_name, self.master_name)):
             combo.blockSignals(True)
             combo.clear()
             combo.addItems(names)
+            if other in names:  # 已經是另一邊的檔案不能再選
+                combo.model().item(names.index(other)).setEnabled(False)
             combo.setCurrentText(cur)
             combo.blockSignals(False)
         self.files.refresh(self.ws.list_installed(), self.ws.list_workspace(), self.master_name, self.slave_name)
@@ -313,6 +338,25 @@ class MainWindow(QMainWindow):
         else:
             self.refresh_files()
 
+    def remove_lang(self, name: str) -> None:
+        with self._working():
+            if name in (self.master_name, self.slave_name):
+                self.info("無法移除", f"{name} 目前是{'主語系' if name == self.master_name else '副語系'}，"
+                          "請先切換到別的檔案再移除。", error=True)
+                return
+            info = next((i for i in self.ws.list_workspace() if i.name == name), None)
+            if info is None:
+                return
+            warn = "" if info.deployed else "\n\n⚠ 這個檔案有尚未部署的修改，移除後只能從 backup 資料夾找回。"
+            if self.ask("從工作區移除", f"要把 {name} 從工作區移除嗎？\n"
+                        f"會先備份到 backup 資料夾，PL/SQL Developer 裡的檔案不受影響。{warn}") != QMessageBox.Yes:
+                return
+            try:
+                self.ws.remove_lang(name)
+            except OSError as e:
+                self.info("無法移除", f"{name}\n\n{e}", error=True)
+            self.refresh_files()
+
     def _ensure_imported(self, name: str) -> bool:
         if (self.ws.lang_dir / name).exists():
             return True
@@ -339,6 +383,10 @@ class MainWindow(QMainWindow):
         if not master or not slave:
             return
         if (master, slave) == (self.master_name, self.slave_name):
+            return
+        if master == slave:
+            self.info("不能選同一個檔案", f"主語系和副語系都是 {master}。\n主語系是比對基準（唯讀），請選另一個檔案當副語系。")
+            self.refresh_files()
             return
         if confirm and not self.confirm_discard():
             self.refresh_files()

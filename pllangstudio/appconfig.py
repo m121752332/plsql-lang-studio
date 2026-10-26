@@ -67,3 +67,19 @@ def theme_mode() -> str:
 
 def remember_theme(mode: str) -> None:
     _update(theme=mode)
+
+
+def font_family() -> str:
+    """使用者選的介面字型；空字串表示用系統預設。"""
+    value = _load().get("font_family")
+    return value if isinstance(value, str) else ""
+
+
+def font_size() -> int:
+    """使用者選的字體大小（pt）；0 表示用系統預設。"""
+    value = _load().get("font_size")
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def remember_font(family: str, size: int) -> None:
+    _update(font_family=family, font_size=size)

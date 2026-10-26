@@ -278,7 +278,7 @@ def test_file_panel_workspace_above_installed(win):
     assert top.findChild(QLabel).text() == "<b>工作區</b>"
     roles = {win.files.workspace.topLevelItem(k).text(0): win.files.workspace.topLevelItem(k).text(1)
              for k in range(win.files.workspace.topLevelItemCount())}
-    assert roles == {"Chinese.lang": "主語系", "Taiwan.lang": "副語系"}
+    assert roles == {"Chinese.lang": "🔒 主語系", "Taiwan.lang": "副語系"}
 
 
 def test_theme_switch_recolors_table(win):
@@ -302,3 +302,77 @@ def test_no_master_slave_wording_in_ui(win):
     texts += [win.model.headerData(c, Qt.Horizontal) for c in range(win.model.columnCount())]
     texts += [win.scope.itemText(k) for k in range(win.scope.count())]
     assert not [t for t in texts if t and ("MASTER" in t or "SLAVE" in t)]
+
+
+def disabled_items(combo):
+    return [combo.itemText(i) for i in range(combo.count()) if not combo.model().item(i).isEnabled()]
+
+
+def test_pair_rejects_same_file(win):
+    shown = []
+    win.info = lambda *a, **k: shown.append(a)
+    win.set_pair("Taiwan.lang", "Taiwan.lang")
+    assert (win.master_name, win.slave_name) == ("Chinese.lang", "Taiwan.lang") and shown
+
+
+def test_combos_disable_the_other_side(win):
+    assert disabled_items(win.master_combo) == ["Taiwan.lang"]
+    assert disabled_items(win.slave_combo) == ["Chinese.lang"]
+
+
+def test_startup_with_identical_pair_picks_another_file(qtbot, env):
+    root, _ = env
+    path = root / "settings.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["master"] = data["slave"] = "Taiwan.lang"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    w = MainWindow(root, elevate_fn=lambda s, d: False, info=lambda *a, **k: None, ask=lambda *a, **k: QMessageBox.Yes)
+    qtbot.addWidget(w)
+    assert w.master_name and w.slave_name and w.master_name != w.slave_name
+
+
+def test_workspace_list_marks_master_as_locked(win):
+    items = {win.files.workspace.topLevelItem(i).text(0): win.files.workspace.topLevelItem(i)
+             for i in range(win.files.workspace.topLevelItemCount())}
+    assert items["Chinese.lang"].text(1) == "🔒 主語系" and "唯讀" in items["Chinese.lang"].toolTip(1)
+    assert items["Taiwan.lang"].text(1) == "副語系" and "🔒" not in items["Taiwan.lang"].text(1)
+
+
+def test_remove_lang_from_workspace(win, env):
+    root, installed = env
+    win.set_pair("Chinese.lang", "Japanese.lang")  # 會匯入 Japanese
+    win.set_pair("Chinese.lang", "Taiwan.lang")
+    assert (root / "lang" / "Japanese.lang").exists()
+    win.remove_lang("Japanese.lang")
+    assert not (root / "lang" / "Japanese.lang").exists() and (installed / "Japanese.lang").exists()
+    names = [win.files.workspace.topLevelItem(i).text(0) for i in range(win.files.workspace.topLevelItemCount())]
+    assert "Japanese.lang" not in names and "Japanese.lang" not in [win.slave_combo.itemText(i) for i in range(win.slave_combo.count())]
+
+
+def test_remove_lang_declined_keeps_file(win, env):
+    root, _ = env
+    win.set_pair("Chinese.lang", "Japanese.lang")
+    win.set_pair("Chinese.lang", "Taiwan.lang")
+    win.answers.append(QMessageBox.No)
+    win.remove_lang("Japanese.lang")
+    assert (root / "lang" / "Japanese.lang").exists()
+
+
+def test_remove_lang_in_use_is_refused(win, env):
+    root, _ = env
+    shown = []
+    win.info = lambda *a, **k: shown.append(a)
+    for name in ("Chinese.lang", "Taiwan.lang"):  # 主語系與副語系都不能移除
+        win.remove_lang(name)
+        assert (root / "lang" / name).exists()
+    assert len(shown) == 2
+
+
+def test_row_height_follows_font(win):
+    base = win.table.verticalHeader().defaultSectionSize()
+    try:
+        win.fonts.set_font("", 28)
+        assert win.table.verticalHeader().defaultSectionSize() > base
+    finally:
+        win.fonts.reset()
+    assert win.table.verticalHeader().defaultSectionSize() == base

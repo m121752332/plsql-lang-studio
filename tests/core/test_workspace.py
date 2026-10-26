@@ -227,3 +227,24 @@ def test_deploy_elevate_exception_is_failed_result(ws, installed, monkeypatch):
 
     res = ws.deploy("Taiwan.lang", boom)
     assert res.ok is False and "炸了" in res.message
+
+
+def test_remove_lang_backs_up_and_deletes_workspace_copies_only(ws, installed):
+    ws.import_lang("Taiwan.lang")
+    backup = ws.remove_lang("Taiwan.lang")
+    assert not (ws.lang_dir / "Taiwan.lang").exists() and not ws.txt_path("Taiwan.lang").exists()
+    assert backup.parent == ws.backup_dir and backup.read_bytes() == (installed / "Taiwan.lang").read_bytes()
+    assert (installed / "Taiwan.lang").exists()  # PL/SQL Developer 的檔案不能動
+    assert "Taiwan.lang" not in [i.name for i in ws.list_workspace()]
+
+
+def test_remove_lang_can_be_imported_again(ws):
+    ws.import_lang("Taiwan.lang")
+    ws.remove_lang("Taiwan.lang")
+    ws.import_lang("Taiwan.lang")
+    assert (ws.lang_dir / "Taiwan.lang").exists()
+
+
+def test_remove_unknown_lang_raises(ws):
+    with pytest.raises(FileNotFoundError):
+        ws.remove_lang("Nope.lang")
