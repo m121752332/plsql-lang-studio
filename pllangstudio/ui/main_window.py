@@ -97,6 +97,8 @@ class MainWindow(QMainWindow):
         self.files.removeRequested.connect(self.remove_lang)
 
         self.master_combo, self.slave_combo = QComboBox(), QComboBox()
+        for combo in (self.master_combo, self.slave_combo):  # 清單變動時重算寬度，長檔名才不會被截斷
+            combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.master_combo.activated.connect(lambda: self.set_pair(self.master_combo.currentText(), self.slave_name))
         self.slave_combo.activated.connect(lambda: self.set_pair(self.master_name, self.slave_combo.currentText()))
         pick = QHBoxLayout()

@@ -308,6 +308,18 @@ def disabled_items(combo):
     return [combo.itemText(i) for i in range(combo.count()) if not combo.model().item(i).isEnabled()]
 
 
+def test_combos_widen_for_longer_names_after_shown(win, qtbot):
+    win.show()
+    qtbot.waitExposed(win)
+    win.set_pair("Chinese.lang", "Taiwan.lang")
+    combo = win.slave_combo
+    before = combo.sizeHint().width()
+    longest = "Japanese.lang"  # 比 Taiwan.lang 長
+    win.set_pair("Chinese.lang", longest)
+    assert combo.sizeHint().width() > before
+    assert combo.width() >= combo.fontMetrics().horizontalAdvance(longest)
+
+
 def test_pair_rejects_same_file(win):
     shown = []
     win.info = lambda *a, **k: shown.append(a)
