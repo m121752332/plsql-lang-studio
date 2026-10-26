@@ -1,3 +1,5 @@
+import pytest
+
 from langdata import LANG_DIR, needs_lang_dir
 from pllangstudio.core import batch, compare, convert, glossary, langfile
 from pllangstudio.core.glossary import Rule
@@ -28,15 +30,25 @@ def test_save_and_load_roundtrip(tmp_path):
     assert glossary.load(tmp_path / "g.json") == g
 
 
-@needs_lang_dir
-def test_default_glossary_reproduces_taiwan():
-    """驗收標準 #3：s2twp(Chinese) 套用預設用語表後，每個字串都跟目前的 Taiwan.lang 相同。"""
-    zh = langfile.load(LANG_DIR / "Chinese.lang")
-    tw = langfile.load(LANG_DIR / "Taiwan.lang")
-    rules = glossary.default().rules
-    for r in compare.align(zh, tw):
-        m = compare.get_text(zh, r.m_index, r.field, r.item)
-        assert glossary.apply_rules(convert.s2twp(m), rules) == compare.get_text(tw, r.s_index, r.field, r.item)
+@pytest.mark.parametrize("simplified, expected", [
+    ("会话", "工作階段"),
+    ("%1 天后过期", "%1 天後過期"),  # OpenCC 把「天后」當成神明名
+    ("右键单击", "按右鍵"),
+    ("新建表", "新增表"),
+    ("重新建立表", "重新建立表"),  # 「新建」的例外
+    ("撤销", "復原"),
+    ("宏", "巨集"),
+    ("可以通过网络", "可以透過網路"),
+    ("使用通过计数", "使用通過計數"),  # 「通過」的例外
+    ("高亮显示", "醒目提示"),
+    ("自定义模板", "自訂範本"),
+    ("事务", "交易"),
+    ("首选项", "偏好設定"),
+    ("游标", "游標"),
+])
+def test_default_glossary_after_s2twp(simplified, expected):
+    """簡轉繁（s2twp）再套用預設用語表的結果。用固定例句，不依賴 Taiwan.lang 目前的內容（使用者會持續修改它）。"""
+    assert glossary.apply_rules(convert.s2twp(simplified), glossary.default().rules) == expected
 
 
 @needs_lang_dir
