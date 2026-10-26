@@ -542,7 +542,7 @@ uv 會建立 `.venv\` 資料夾，並安裝所有套件（包含測試與打包�
 ### 打包成 exe
 
 ```powershell
-uv run pyinstaller --noconfirm --onefile --windowed --collect-all opencc --name PLLangStudio pllangstudio/__main__.py
+uv run pyinstaller --noconfirm --onefile --windowed --collect-all opencc --name PLLangStudio --specpath build pllangstudio/__main__.py
 ```
 
 每個參數的意思：
@@ -554,13 +554,13 @@ uv run pyinstaller --noconfirm --onefile --windowed --collect-all opencc --name 
 | `--windowed` | 執行時不要跳出黑色的命令列視窗 |
 | `--collect-all opencc` | 把 OpenCC 的字典檔一起包進去。⚠️ **不能省略**，否則 exe 裡的簡轉繁會找不到字典 |
 | `--name PLLangStudio` | exe 的名稱 |
+| `--specpath build` | 把自動產生的 `PLLangStudio.spec` 放在 `build\` 底下，不弄亂專案根目錄 |
 | `pllangstudio/__main__.py` | 程式的進入點 |
 
 完成後：
 
 - 成品在 **`dist\PLLangStudio.exe`**，約 52 MB，大約需要一分鐘。
-- 打包過程的暫存檔在 `build\`，可以刪掉。
-- 專案資料夾會多出 `PLLangStudio.spec`，也可以刪掉。
+- 打包過程的暫存檔和 `PLLangStudio.spec` 都在 `build\`，可以刪掉，下次打包會重新產生。
 
 > ⚠️ 打包前請先**關閉正在執行的 PLLangStudio.exe**，否則舊的 exe 被占用，沒辦法覆蓋。
 
