@@ -1,0 +1,125 @@
+import json
+import shutil
+
+import pytest
+from PySide6.QtWidgets import QMessageBox
+
+from langdata import LANG_DIR, needs_lang_dir
+from pllangstudio.core import langfile
+from pllangstudio.core.compare import Status
+from pllangstudio.core.langfile import Field
+from pllangstudio.ui.compare_model import COL_SLAVE
+from pllangstudio.ui.main_window import MainWindow
+
+pytestmark = needs_lang_dir
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
+    installed = tmp_path / "Languages"
+    installed.mkdir()
+    for n in ["Chinese.lang", "Taiwan.lang", "Japanese.lang"]:
+        shutil.copy(LANG_DIR / n, installed / n)
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "settings.json").write_text(json.dumps({"plsql_lang_dir": str(installed)}), encoding="utf-8")
+    return root, installed
+
+
+@pytest.fixture
+def win(qtbot, env, monkeypatch):
+    root, _ = env
+    answers = []
+    w = MainWindow(root, elevate_fn=lambda s, d: False, info=lambda *a, **k: None,
+                   ask=lambda *a, **k: answers.pop(0) if answers else QMessageBox.Yes)
+    w.answers = answers
+    qtbot.addWidget(w)
+    return w
+
+
+def row_of(win, text):
+    return next(i for i in range(win.model.rowCount()) if win.model.slave_text(i) == text)
+
+
+def test_opens_default_pair_with_auto_import(win, env):
+    root, _ = env
+    assert (win.master_name, win.slave_name) == ("Chinese.lang", "Taiwan.lang")
+    assert win.model.rowCount() == 6672
+    assert (root / "lang" / "Taiwan.lang").exists() and (root / "txt" / "Taiwan.txt").exists()
+    assert win.filter_buttons[None].text() == "全部 6,672"
+
+
+def test_switch_slave_keeps_selected_key(win):
+    i = row_of(win, "&取消")
+    key = win.model.rows[i].key
+    win.select_row(i)
+    win.set_pair("Chinese.lang", "Japanese.lang")  # 會詢問是否匯入，ask 預設回答「是」
+    assert win.slave_name == "Japanese.lang"
+    assert win.model.rows[win.current_row()].key == key
+
+
+def test_edit_save_and_deploy(win, env):
+    root, installed = env
+    i = row_of(win, "&取消")
+    win.model.setData(win.model.index(i, COL_SLAVE), "&取消X")
+    assert win.save()
+    assert win.model.modified_count() == 0
+    saved = langfile.load(root / "lang" / "Taiwan.lang")
+    assert any(e.target[Field.CAPTION] == ["&取消X"] for e in saved.entries)
+    win.deploy()
+    assert (installed / "Taiwan.lang").read_bytes() == (root / "lang" / "Taiwan.lang").read_bytes()
+
+
+def test_save_blocked_by_placeholder_error(win, env):
+    root, _ = env
+    before = (root / "lang" / "Taiwan.lang").read_bytes()
+    i = next(i for i in range(win.model.rowCount()) if "%1" in (win.model.slave_text(i) or ""))
+    win.model.request_edit([(i, win.model.slave_text(i).replace("%1", ""))], "測試")
+    assert not win.save()
+    assert (root / "lang" / "Taiwan.lang").read_bytes() == before
+
+
+def test_notepad_edit_is_reloaded_and_marked(win, env):
+    root, _ = env
+    txt = root / "txt" / "Taiwan.txt"
+    txt.write_bytes(txt.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
+    win.poll_txt()
+    i = row_of(win, "&取消N")
+    assert Status.MODIFIED in win.model.status[i]
+
+
+def test_conflict_keeps_table_when_user_says_no(win, env):
+    root, _ = env
+    i = row_of(win, "定義")
+    win.model.request_edit([(i, "表格改")], "測試")
+    txt = root / "txt" / "Taiwan.txt"
+    txt.write_bytes(txt.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
+    win.answers.append(QMessageBox.No)
+    win.poll_txt()
+    assert win.model.slave_text(i) == "表格改"
+    assert "表格改" in txt.read_text(encoding="utf-8-sig")
+
+
+def test_asks_for_plsql_dir_when_missing(qtbot, env, monkeypatch):
+    root, installed = env
+    (root / "settings.json").write_text(json.dumps({"plsql_lang_dir": str(root / "沒有這個目錄")}), encoding="utf-8")
+    monkeypatch.setattr("pllangstudio.ui.main_window.QFileDialog.getExistingDirectory", lambda *a, **k: str(installed))
+    w = MainWindow(root, info=lambda *a, **k: None, ask=lambda *a, **k: QMessageBox.Yes)
+    qtbot.addWidget(w)
+    assert w.ws.installed_dir == installed
+    assert w.model.rowCount() == 6672
+
+
+def test_apply_edits_rejects_multiline_in_single_line_row(qtbot, env):
+    root, _ = env
+    calls = []
+    w = MainWindow(root, elevate_fn=lambda s, d: False,
+                   info=lambda *a, **k: calls.append((a, k)), ask=lambda *a, **k: QMessageBox.Yes)
+    qtbot.addWidget(w)
+    i = row_of(w, "&取消")
+    before = w.model.slave_text(i)
+    assert w.apply_edits([(i, "a\nb")], "測試") is False
+    assert len(calls) == 1 and calls[0][1].get("error") is True
+    assert w.undo_stack.count() == 0
+    assert w.model.slave_text(i) == before
