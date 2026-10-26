@@ -14,7 +14,7 @@ pllangstudio/
 tests/
 ├─ core/   核心模組測試
 └─ ui/     pytest-qt 畫面測試
-docs/adr/  架構決策紀錄（0001～0013）
+docs/adr/  架構決策紀錄（0001～0014）
 ```
 
 ## 常用指令
