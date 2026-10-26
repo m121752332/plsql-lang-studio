@@ -24,7 +24,10 @@ def find_row(model, slave_text):
 def test_row_count_and_counts(model):
     assert model.rowCount() == 6672
     c = model.counts()
-    assert c["ALL"] == 6672 and c[Status.SIMPLIFIED] == 1 and c[Status.MODIFIED] == 0
+    assert c["ALL"] == 6672 and c[Status.MODIFIED] == 0
+    # 殘留簡體字的筆數會隨使用者修正而變，這裡只確認「游標」這類例外詞不會被算進去
+    assert all("游標" not in (model.slave_text(i) or "") for i in range(model.rowCount())
+               if Status.SIMPLIFIED in model.status[i])
 
 
 def test_master_not_editable_slave_editable(model):
@@ -67,12 +70,14 @@ def test_mark_saved_clears_modified(model):
 def test_filter_by_status_and_search(model):
     f = CompareFilter()
     f.setSourceModel(model)
+    i = find_row(model, "&取消")
+    model.request_edit([(i, "&取消后")], "測試")  # 放一個殘留簡體字
     f.set_status(Status.SIMPLIFIED)
-    assert f.rowCount() == 1
+    assert i in {f.mapToSource(f.index(r, 0)).row() for r in range(f.rowCount())}
     f.set_status(None)
     f.set_search("tablespace", "英文")
     assert 0 < f.rowCount() < 200
-    f.set_search("天后", "SLAVE")
+    f.set_search("取消后", "SLAVE")
     assert f.rowCount() == 1
 
 

@@ -58,9 +58,12 @@ def test_status_different_and_modified(rows, zh, tw):
     assert Status.MODIFIED in status
 
 
-def test_status_simplified(rows, zh, tw):
-    r = next(r for r in rows if compare.get_text(tw, r.s_index, r.field, r.item) == "%1 天后過期")
-    status, issues = compare.row_status(r, zh, tw, None, ["游標", "批准"])
+def test_status_simplified(rows, zh):
+    # 自己在副本放一個殘留簡體字，不依賴使用者目前 Taiwan.lang 的內容
+    lf = langfile.load(LANG_DIR / "Taiwan.lang")
+    r = next(r for r in rows if r.source == "Expires in %1 days")
+    compare.set_text(lf, r.s_index, r.field, r.item, "%1 天后過期")
+    status, _ = compare.row_status(r, zh, lf, None, ["游標", "批准"])
     assert {Status.SIMPLIFIED, Status.WARNING} <= status
 
 
