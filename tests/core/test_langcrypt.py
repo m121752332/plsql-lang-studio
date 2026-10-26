@@ -1,13 +1,10 @@
-from pathlib import Path
-
 import pytest
 
-import langcrypt
-
-LANG_DIR = Path(r"C:\Program Files\PLSQL Developer 17\Languages")
-LANG_FILES = sorted(LANG_DIR.glob("*.lang"))
+from langdata import LANG_FILES, needs_lang_dir
+from pllangstudio.core import langcrypt
 
 
+@needs_lang_dir
 @pytest.mark.parametrize("path", LANG_FILES, ids=lambda p: p.name)
 def test_roundtrip_is_byte_identical(path):
     data = path.read_bytes()
