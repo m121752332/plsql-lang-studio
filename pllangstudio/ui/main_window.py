@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import QItemSelectionModel, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QFontMetrics, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QButtonGroup, QComboBox,
-                               QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+                               QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
                                QSplitter, QTableView, QToolButton, QVBoxLayout, QWidget)
 
 from .. import __version__, appconfig, elevate
@@ -33,7 +33,41 @@ FILTERS = [(None, "全部"), (Status.DIFFERENT, None), (Status.SIMPLIFIED, None)
 
 
 class CompareTable(QTableView):
-    """Enter 存入後自動跳到下一列。"""
+    """Enter 存入後自動跳到下一列；右鍵或 Ctrl+C 複製儲存格的完整內容。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_menu)
+
+    def copy_cell(self, index) -> None:
+        """複製完整文字；多行字串不能只複製表格上顯示的那一行。"""
+        if index.isValid():
+            QApplication.clipboard().setText(str(index.data(Qt.EditRole) or ""))
+
+    def copy_row(self, index) -> None:
+        """整列所有欄位以 Tab 分隔，每個欄位都是完整內容。"""
+        if index.isValid():
+            cells = (index.sibling(index.row(), c).data(Qt.EditRole) for c in range(self.model().columnCount()))
+            QApplication.clipboard().setText("\t".join(str(v or "") for v in cells))
+
+    def cell_menu(self, index) -> QMenu:
+        menu = QMenu(self)
+        header = self.model().headerData(index.column(), Qt.Horizontal)
+        menu.addAction(f"複製「{header}」", lambda: self.copy_cell(index))
+        menu.addAction("複製整列", lambda: self.copy_row(index))
+        return menu
+
+    def _show_menu(self, pos) -> None:
+        index = self.indexAt(pos)
+        if index.isValid():
+            self.cell_menu(index).exec(self.viewport().mapToGlobal(pos))
+
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.Copy):
+            self.copy_cell(self.currentIndex())
+            return
+        super().keyPressEvent(event)
 
     def closeEditor(self, editor, hint):
         super().closeEditor(editor, hint)
@@ -245,6 +279,7 @@ class MainWindow(QMainWindow):
             "3. 批次修改：編輯 ▸ 尋找取代、簡→繁、用語對照表，套用前都會先預覽。\n"
             "4. Ctrl+S 加密存檔（只寫工作區），確認無誤後 檔案 ▸ 部署到 PL/SQL Developer，重新啟動 PL/SQL Developer 生效。\n"
             "5. 也可以用記事本修改副語系的 .txt，存檔後會自動載入；只能改翻譯，不能新增或刪除筆。\n\n"
+            "表格中按右鍵可複製單一儲存格或整列（Tab 分隔）；Ctrl+C 複製目前的儲存格。\n\n"
             "快速鍵：Ctrl+S 存檔、Ctrl+Z／Ctrl+Y 復原重做、Ctrl+F 尋找、Ctrl+H 尋找取代、F3／Shift+F3 下一個／上一個不同。"))
 
     def show_about(self) -> None:

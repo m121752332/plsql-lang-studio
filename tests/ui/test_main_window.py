@@ -10,7 +10,7 @@ from langdata import LANG_DIR, needs_lang_dir
 from pllangstudio.core import langfile
 from pllangstudio.core.compare import Status
 from pllangstudio.core.langfile import Field
-from pllangstudio.ui.compare_model import COL_SLAVE
+from pllangstudio.ui.compare_model import COL_KEY, COL_MASTER, COL_SLAVE, COL_SOURCE
 from pllangstudio.ui.main_window import MainWindow
 
 pytestmark = needs_lang_dir
@@ -388,3 +388,33 @@ def test_row_height_follows_font(win):
     finally:
         win.fonts.reset()
     assert win.table.verticalHeader().defaultSectionSize() == base
+
+
+def test_cell_menu_copies_full_text(win):
+    i = next(i for i in range(win.model.rowCount()) if "\n" in win.model.rows[i].source)  # 多行字串不能只複製到顯示用的一行
+    for col in (COL_KEY, COL_SOURCE, COL_MASTER, COL_SLAVE):
+        idx = win.proxy.mapFromSource(win.model.index(i, col))
+        menu = win.table.cell_menu(idx)
+        copy = next(a for a in menu.actions() if a.text().startswith("複製"))
+        copy.trigger()
+        assert QApplication.clipboard().text() == win.model.data(win.model.index(i, col), Qt.EditRole)
+    assert QApplication.clipboard().text() == win.model.slave_text(i)
+    assert "\n" in win.model.rows[i].source
+
+
+def test_cell_menu_copies_whole_row(win):
+    i = next(i for i in range(win.model.rowCount()) if "\n" in win.model.rows[i].source)
+    idx = win.proxy.mapFromSource(win.model.index(i, COL_KEY))
+    menu = win.table.cell_menu(idx)
+    next(a for a in menu.actions() if a.text() == "複製整列").trigger()
+    expected = "\t".join(str(win.model.data(win.model.index(i, c), Qt.EditRole))
+                         for c in range(win.model.columnCount()))
+    assert QApplication.clipboard().text() == expected
+
+
+def test_ctrl_c_copies_current_cell(win, qtbot):
+    i = next(i for i in range(win.model.rowCount()) if "\n" in win.model.rows[i].source)
+    idx = win.proxy.mapFromSource(win.model.index(i, COL_SOURCE))
+    win.table.setCurrentIndex(idx)
+    qtbot.keyClick(win.table, Qt.Key_C, Qt.ControlModifier)
+    assert QApplication.clipboard().text() == win.model.rows[i].source
