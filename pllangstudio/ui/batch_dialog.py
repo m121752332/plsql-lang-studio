@@ -48,8 +48,16 @@ class PreviewDialog(QDialog):
         self._update_summary()
 
     def _set_all(self, state) -> None:
-        for r in range(self.table.rowCount()):
-            self.table.item(r, 0).setCheckState(state)
+        # itemChanged 由 model 的 dataChanged 轉發，只擋 table 本身擋不住，要擋 model。
+        model = self.table.model()
+        model.blockSignals(True)
+        try:
+            for r in range(self.table.rowCount()):
+                self.table.item(r, 0).setCheckState(state)
+        finally:
+            model.blockSignals(False)
+        self.table.viewport().update()
+        self._update_summary()
 
     def _update_summary(self, *_):
         self.summary.setText(f"共 {len(self.changes)} 個字串，勾選 {len(self.checked())} 個")
