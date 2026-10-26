@@ -10,9 +10,7 @@ class EditCommand(QUndoCommand):
         self.edits = edits  # (列, 修改前, 修改後)
 
     def redo(self):
-        for i, _old, new in self.edits:
-            self.model.apply_text(i, new)
+        self.model.apply_texts([(i, new) for i, _old, new in self.edits])
 
     def undo(self):
-        for i, old, _new in reversed(self.edits):
-            self.model.apply_text(i, old)
+        self.model.apply_texts([(i, old) for i, old, _new in reversed(self.edits)])

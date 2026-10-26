@@ -111,20 +111,35 @@ class CompareModel(QAbstractTableModel):
     # ---------- 修改 ----------
 
     def request_edit(self, edits: list[tuple[int, str]], label: str) -> None:
-        """所有修改都經過這裡，包成一個可以復原的步驟。"""
+        """所有修改都經過這裡，包成一個可以復原的步驟。整批先驗證，有一筆不合法就什麼都不做。"""
         from .commands import EditCommand
+        for i, new in edits:
+            r = self.rows[i]
+            if r.s_index is None:
+                raise ValueError(f"第 {i + 1} 列不能修改：沒有 SLAVE 的翻譯")
+            if r.item is not None and "\n" in new:
+                raise ValueError(f"第 {i + 1} 列是單行字串，不能包含換行")
         real = [(i, self.slave_text(i), new) for i, new in edits if self.slave_text(i) != new]
         if real:
             self.undo_stack.push(EditCommand(self, real, label))
 
-    def apply_text(self, i: int, text: str) -> None:
-        r = self.rows[i]
-        compare.set_text(self.slave, r.s_index, r.field, r.item, text)
-        # 同一個欄位的其他列也可能受影響（多行欄位），一起重算
-        for j in self._entry_rows[r.s_index]:
+    def apply_texts(self, pairs: list[tuple[int, str]]) -> None:
+        """一次套用多列文字，只發出一次 dataChanged 與 countsChanged。"""
+        if not pairs:
+            return
+        touched: set[int] = set()
+        for i, text in pairs:
+            r = self.rows[i]
+            compare.set_text(self.slave, r.s_index, r.field, r.item, text)
+            # 同一個 SLAVE 條目的其他列也可能受影響（多行欄位），一起重算
+            touched.update(self._entry_rows[r.s_index])
+        for j in touched:
             self.status[j], self.issues[j] = self._compute(j)
-            self.dataChanged.emit(self.index(j, 0), self.index(j, len(COLUMNS) - 1))
+        self.dataChanged.emit(self.index(min(touched), 0), self.index(max(touched), len(COLUMNS) - 1))
         self.countsChanged.emit()
+
+    def apply_text(self, i: int, text: str) -> None:
+        self.apply_texts([(i, text)])
 
     def mark_saved(self) -> None:
         self.original = [self.slave_text(i) for i in range(len(self.rows))]

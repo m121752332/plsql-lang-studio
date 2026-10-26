@@ -74,3 +74,44 @@ def test_filter_by_status_and_search(model):
     assert 0 < f.rowCount() < 200
     f.set_search("天后", "SLAVE")
     assert f.rowCount() == 1
+
+
+@pytest.fixture
+def hu_model(qtbot):
+    m = CompareModel(QUndoStack())
+    m.load(langfile.load(LANG_DIR / "Chinese.lang"), langfile.load(LANG_DIR / "Hungarian.lang"), [])
+    return m
+
+
+def test_request_edit_rejects_row_without_slave(hu_model):
+    i = next(i for i, r in enumerate(hu_model.rows) if r.s_index is None)
+    with pytest.raises(ValueError, match="沒有 SLAVE"):
+        hu_model.request_edit([(i, "改")], "測試")
+    assert hu_model.undo_stack.count() == 0
+
+
+def test_request_edit_rejects_newline_on_single_line_and_is_atomic(model):
+    i = find_row(model, "&取消")
+    j = find_row(model, "定義")
+    with pytest.raises(ValueError, match="單行"):
+        model.request_edit([(i, "A"), (j, "甲\n乙")], "批次")
+    assert model.slave_text(i) == "&取消" and model.undo_stack.count() == 0
+
+
+def test_request_edit_multiline_row_allows_newline_and_undo(model):
+    i = next(i for i, r in enumerate(model.rows) if r.item is None and r.s_index is not None)
+    before = model.slave_text(i)
+    model.request_edit([(i, "甲\n乙")], "多行")
+    assert model.slave_text(i) == "甲\n乙"
+    model.undo_stack.undo()
+    assert model.slave_text(i) == before
+
+
+def test_batch_emits_countschanged_once(model, qtbot):
+    rows = [find_row(model, "&取消"), find_row(model, "定義")]
+    with qtbot.waitSignal(model.countsChanged, timeout=1000):
+        model.request_edit([(rows[0], "A"), (rows[1], "B")], "批次")
+    counter = []
+    model.countsChanged.connect(lambda: counter.append(1))
+    model.undo_stack.undo()
+    assert len(counter) == 1
