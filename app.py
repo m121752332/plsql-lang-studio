@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-import langcrypt
+from pllangstudio.core import langcrypt
 
 APP_TITLE = "PL/SQL Developer 語言檔編輯器"
 DEFAULT_DIR = r"C:\Program Files\PLSQL Developer 17\Languages"
