@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QFontMetrics, QKeySequence, QUndoStack
+from PySide6.QtGui import QAction, QFontMetrics, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QButtonGroup, QComboBox,
                                QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
                                QSplitter, QTableView, QToolButton, QVBoxLayout, QWidget)
@@ -23,10 +23,10 @@ from .compare_model import COL_FIELD, COL_KEY, COL_MASTER, COL_NO, COL_SLAVE, CO
     CompareFilter, CompareModel
 from .detail_panel import DetailPanel
 from .file_panel import FilePanel
-from .font_dialog import FontDialog
 from .fonts import FontManager
 from .glossary_dialog import APPLY, GlossaryDialog
-from .theme import MODE_LABEL, ThemeManager
+from .settings_dialog import SettingsDialog
+from .theme import ThemeManager
 from .toast import ToastHost
 
 FILTERS = [(None, "全部"), (Status.DIFFERENT, None), (Status.SIMPLIFIED, None), (Status.UNTRANSLATED, None),
@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self.proxy.setSourceModel(self.model)
         self.master_name = self.slave_name = ""
         self._busy = 0  # 對話框或長操作進行中，poll_txt 先不要插手
+        self.event_viewer = None
         self.resize(1400, 860)
         self._build_ui()
         self.open_workspace(workspace_root)
@@ -242,20 +243,16 @@ class MainWindow(QMainWindow):
         make("replace", "🔍 尋找取代…", self.find_replace, "Ctrl+H")
         make("s2twp", "簡→繁（主語系 → 副語系）", self.convert_s2twp)
         make("glossary", "📖 用語對照表…", self.edit_glossary)
-        make("font", "字型與大小…", lambda: FontDialog(self.fonts, self).exec())
         make("font_bigger", "放大字體", lambda: self.fonts.step(1))
         self.act["font_bigger"].setShortcuts([QKeySequence(QKeySequence.ZoomIn), QKeySequence("Ctrl+=")])  # 不按 Shift 也能放大
         make("font_smaller", "縮小字體", lambda: self.fonts.step(-1), QKeySequence.ZoomOut)
         make("font_reset", "還原預設字型", self.fonts.reset, "Ctrl+0")
+        for name in ("font_bigger", "font_smaller", "font_reset"):  # 不在選單上，快速鍵仍要有效
+            self.addAction(self.act[name])
         make("help", "使用說明", self.show_help, "F1")
         make("about", "關於 PLLangStudio", self.show_about)
-        self.theme_group = QActionGroup(self)
-        for mode, label in MODE_LABEL.items():
-            a = QAction(label, self, checkable=True)
-            a.setChecked(self.theme.mode == mode)
-            a.triggered.connect(lambda _=False, m=mode: self.theme.set_mode(m))
-            self.theme_group.addAction(a)
-            self.act[f"theme_{mode}"] = a
+        make("settings", "配置…", self.open_settings)
+        make("events", "事件檢視器…", self.show_events)
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
@@ -263,14 +260,11 @@ class MainWindow(QMainWindow):
         for name in ("workspace", "plsql_dir", None, "save", "deploy", None, "notepad", "open_ws", None, "quit"):
             file_menu.addSeparator() if name is None else file_menu.addAction(self.act[name])
         edit_menu = bar.addMenu("編輯(&E)")
-        for name in ("undo", "redo", None, "find", "next_diff", "prev_diff", "replace", None, "s2twp", "glossary", None):
+        for name in ("undo", "redo", None, "find", "next_diff", "prev_diff", "replace", None, "s2twp", "glossary"):
             edit_menu.addSeparator() if name is None else edit_menu.addAction(self.act[name])
-        theme_menu = edit_menu.addMenu("主題")
-        for mode in MODE_LABEL:
-            theme_menu.addAction(self.act[f"theme_{mode}"])
-        font_menu = edit_menu.addMenu("字型")
-        for name in ("font", None, "font_bigger", "font_smaller", "font_reset"):
-            font_menu.addSeparator() if name is None else font_menu.addAction(self.act[name])
+        settings_menu = bar.addMenu("配置(&S)")
+        settings_menu.addAction(self.act["settings"])
+        settings_menu.addAction(self.act["events"])
         about_menu = bar.addMenu("關於(&A)")
         about_menu.addAction(self.act["help"])
         about_menu.addAction(self.act["about"])
@@ -284,6 +278,13 @@ class MainWindow(QMainWindow):
             "5. 也可以用記事本修改副語系的 .txt，存檔後會自動載入；只能改翻譯，不能新增或刪除筆。\n\n"
             "表格中按右鍵可複製單一儲存格或整列（Tab 分隔）；Ctrl+C 複製目前的儲存格。\n\n"
             "快速鍵：Ctrl+S 存檔、Ctrl+Z／Ctrl+Y 復原重做、Ctrl+F 尋找、Ctrl+H 尋找取代、F3／Shift+F3 下一個／上一個不同。"))
+
+    def open_settings(self) -> None:
+        with self._working():
+            SettingsDialog(self.theme, self.fonts, self.show_events, self).exec()
+
+    def show_events(self) -> None:
+        pass  # Task 6 實作
 
     def show_about(self) -> None:
         QMessageBox.about(self, "關於 PLLangStudio", (

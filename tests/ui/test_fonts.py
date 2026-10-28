@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QApplication
 
 from pllangstudio import appconfig
 from pllangstudio.ui import fonts
-from pllangstudio.ui.font_dialog import FontDialog
 
 
 @pytest.fixture
@@ -65,28 +64,3 @@ def test_invalid_saved_values_fall_back_to_default(manager):
 def test_changed_signal_emitted(manager, qtbot):
     with qtbot.waitSignal(manager.changed):
         manager.step(1)
-
-
-def test_dialog_applies_choice(manager, qtbot):
-    dlg = FontDialog(manager)
-    qtbot.addWidget(dlg)
-    dlg.size.setValue(15)
-    dlg.accept()  # 測試環境（offscreen）沒有字型清單，只驗證選到的字型與大小原樣交給管理員
-    assert manager.size() == 15 and manager.family() == dlg.family.currentFont().family()
-    assert appconfig.font_size() == 15
-
-
-def test_dialog_cancel_changes_nothing(manager, qtbot):
-    dlg = FontDialog(manager)
-    qtbot.addWidget(dlg)
-    dlg.size.setValue(20)
-    dlg.reject()
-    assert manager.size() == manager.default_size
-
-
-def test_dialog_reset_button(manager, qtbot):
-    manager.set_font("Arial", 18)
-    dlg = FontDialog(manager)
-    qtbot.addWidget(dlg)
-    dlg.reset_button.click()
-    assert manager.size() == manager.default_size and appconfig.font_size() == 0

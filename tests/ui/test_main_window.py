@@ -272,15 +272,19 @@ def menu_texts(menu) -> list[str]:
     return [a.text() for a in menu.actions() if not a.isSeparator()]
 
 
-def test_menu_bar_has_file_edit_about(win):
+def test_menu_bar_has_file_edit_settings_about(win):
     menus = {a.text(): a.menu() for a in win.menuBar().actions()}
-    assert list(menus) == ["檔案(&F)", "編輯(&E)", "關於(&A)"]
+    assert list(menus) == ["檔案(&F)", "編輯(&E)", "配置(&S)", "關於(&A)"]
     assert "💾 加密存檔" in menu_texts(menus["檔案(&F)"]) and "結束" in menu_texts(menus["檔案(&F)"])
     edit = menu_texts(menus["編輯(&E)"])
-    assert {"復原", "重做", "🔍 尋找取代…", "主題"} <= set(edit)
-    theme_menu = next(a.menu() for a in menus["編輯(&E)"].actions() if a.text() == "主題")
-    assert menu_texts(theme_menu) == ["亮色", "暗色", "跟隨系統"]
+    assert {"復原", "重做", "🔍 尋找取代…"} <= set(edit) and "主題" not in edit and "字型" not in edit
+    assert menu_texts(menus["配置(&S)"]) == ["配置…", "事件檢視器…"]
     assert menu_texts(menus["關於(&A)"]) == ["使用說明", "關於 PLLangStudio"]
+
+
+def test_font_shortcuts_still_work(win):
+    shortcuts = {s.toString() for a in win.actions() for s in a.shortcuts()}
+    assert {"Ctrl++", "Ctrl+-", "Ctrl+0"} <= shortcuts
 
 
 def test_shortcuts_are_registered_once(win):
@@ -306,12 +310,11 @@ def test_theme_switch_recolors_table(win):
     from pllangstudio.ui import theme
     i = row_of(win, "定義")  # 主語系「定义」≠ 副語系「定義」→ 不同（黃底）
     cell = win.model.index(i, COL_SLAVE)
-    win.act["theme_dark"].trigger()
+    win.theme.set_mode("dark")
     assert win.model.data(cell, Qt.BackgroundRole).color().name() == theme.DARK.status[Status.DIFFERENT]
     assert QApplication.instance().palette().color(QPalette.Window).name() == theme.DARK.palette[QPalette.Window]
-    win.act["theme_light"].trigger()
+    win.theme.set_mode("light")
     assert win.model.data(cell, Qt.BackgroundRole).color().name() == theme.LIGHT.status[Status.DIFFERENT]
-    assert win.act["theme_light"].isChecked() and not win.act["theme_dark"].isChecked()
 
 
 def test_no_master_slave_wording_in_ui(win):
