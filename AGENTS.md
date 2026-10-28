@@ -32,6 +32,16 @@ docs/adr/  架構決策紀錄（0001～0018）
 | 產生發行 zip | `uv run package`（build 後壓成 `bin\PLLangStudio-v版本號-win64.zip`） |
 | 加依賴 | `uv add 套件`；開發用加 `--dev` |
 
+### 用 MCP 操作執行中的程式（除錯用）
+
+專案根目錄的 `.mcp.json` 設定了 [pyside6-mcp](https://github.com/com55/pyside6-mcp)（`uvx pyside6-mcp`，不會加進 `pyproject.toml`），可截圖、看元件樹、點擊、輸入、觸發選單與讀取輸出。
+
+- 啟動用 `launch_app`，入口指向 `pllangstudio/__main__.py`；不要傳 `port=`，不需改程式碼。
+- 程式會讀寫使用者真實的 `%APPDATA%\PLLangStudio`（設定、事件紀錄）與上次開啟的工作區。除錯時**不要按「部署」、不要存檔或修改使用者的工作區**；需要動手時先在暫存資料夾建立工作區再切過去。
+- `find_widget` 給的元件編號只用 weakref 記住；由 Qt 自己建立、Python 端沒人持有的元件（例如 `QDialogButtonBox` 的 OK／Cancel）下一次呼叫就會「not found」，改用 `eval_python` 在同一次呼叫裡找到並 `click()`。
+- 用 `exec()` 開的模態對話框（如「配置…」）以 `trigger_action` 開啟時，該次呼叫會回錯誤，但對話框其實已開好，可繼續操作。
+- 用完記得 `stop_app`。畫面行為的回歸驗證仍以 pytest-qt 測試為準，MCP 只用來觀察與重現問題。
+
 ## 架構規則
 
 - **分層不可破壞**（ADR-0006）：`core/` 不可 import PySide6；邏輯放 `core/`，`ui/` 只呼叫它。新功能先想邏輯能不能放進 `core/` 並用測試覆蓋。
