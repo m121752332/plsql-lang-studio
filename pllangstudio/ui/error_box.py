@@ -16,6 +16,7 @@ def error_box(parent, title: str, text: str, event_id: int | None,
     copy = box.addButton("複製事件編號", QMessageBox.ActionRole)
     view = box.addButton("開啟事件檢視器", QMessageBox.ActionRole) if open_viewer else None
     box.setDefaultButton(QMessageBox.Ok)
+    box.setEscapeButton(QMessageBox.Ok)  # 有 ActionRole 按鈕時 Qt 不會自動指定，Esc 與右上角 X 會沒反應
 
     def clicked(b) -> None:
         if b == copy:

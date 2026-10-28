@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from pllangstudio.ui.error_box import error_box
@@ -26,6 +27,15 @@ def test_without_viewer_has_no_viewer_button(qtbot):
     box = error_box(None, "存檔失敗", "沒有存成功", 42)
     qtbot.addWidget(box)
     assert [b.text() for b in box.buttons() if b.text() == "開啟事件檢視器"] == []
+
+
+def test_escape_closes_box_with_action_buttons(qtbot):
+    box = error_box(None, "存檔失敗", "沒有存成功", 42, lambda eid: None)
+    qtbot.addWidget(box)
+    box.show()
+    qtbot.waitExposed(box)
+    qtbot.keyClick(box, Qt.Key_Escape)
+    assert not box.isVisible()
 
 
 def test_without_event_id_only_ok(qtbot):

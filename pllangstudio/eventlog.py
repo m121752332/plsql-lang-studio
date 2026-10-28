@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import os
 import platform
@@ -331,6 +332,13 @@ def compact() -> None:
             pass
 
 
+def _rollback() -> None:
+    """復原交易；復原本身失敗時不可蓋掉原本的錯誤。呼叫端要持有 _lock。"""
+    if _conn is not None and _conn.in_transaction:
+        with contextlib.suppress(sqlite3.Error):
+            _conn.execute("ROLLBACK")
+
+
 def reset(now: datetime | None = None) -> tuple[int, Path]:
     """初始化：先把全部紀錄備份成 zip，再清空並把事件編號歸零。
 
@@ -339,21 +347,28 @@ def reset(now: datetime | None = None) -> tuple[int, Path]:
     if _conn is None:
         raise RuntimeError("事件紀錄目前無法使用")
     now = now or datetime.now()
-    events = query(limit=-1)  # LIMIT -1：全部
     dest = backup_dir() / f"events-{now:%Y%m%d-%H%M%S}.zip"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    export_zip(events, dest)
+    # 讀取、備份、刪除放在同一個交易：BEGIN IMMEDIATE 先取得寫入鎖，備份之後才寫入的紀錄不會被刪掉。
+    # export_zip 不寫紀錄，持有 _lock 時呼叫是安全的；寫紀錄的 info、compact 要等離開鎖之後。
     with _lock:
+        if _conn is None:
+            raise RuntimeError("事件紀錄目前無法使用")
         try:
-            _conn.execute("BEGIN")
+            _conn.execute("BEGIN IMMEDIATE")
+            rows = _conn.execute(f"SELECT {_COLUMNS} FROM events ORDER BY id DESC").fetchall()  # 讀取失敗要拋出，不可當成沒有紀錄
+            events = [_event(r) for r in rows]
+            export_zip(events, dest)
             _conn.execute("DELETE FROM events")
             _conn.execute("DELETE FROM sqlite_sequence WHERE name = 'events'")  # 編號從 1 重新開始
-            _conn.execute("DELETE FROM sessions WHERE id != ?", (_session_id or -1,))
+            _conn.execute("DELETE FROM sessions WHERE ended IS NOT NULL")  # 還沒結束的（含其他實例）要留著，才偵測得到異常結束
             _conn.execute("COMMIT")
         except sqlite3.Error as e:
-            if _conn.in_transaction:
-                _conn.execute("ROLLBACK")
+            _rollback()
             raise RuntimeError(f"無法清空事件紀錄：{e}") from e
+        except BaseException:
+            _rollback()
+            raise
     compact()
     info("事件紀錄", f"事件紀錄已初始化，刪除 {len(events):,} 筆；原紀錄備份在：{dest}")
     return len(events), dest
@@ -431,7 +446,7 @@ def start_session(pid: int | None = None, alive: Callable[[int], bool] | None = 
         try:
             for sid, other, started in _conn.execute(
                     "SELECT id, pid, started FROM sessions WHERE ended IS NULL").fetchall():
-                if other == pid or alive(other):
+                if other != pid and alive(other):  # 自己還沒寫入工作階段，同 pid 的未結束紀錄必是已死的舊實例（pid 被重用）
                     continue
                 last = _conn.execute("SELECT MAX(id) FROM events WHERE time >= ?", (started,)).fetchone()[0]
                 _conn.execute("UPDATE sessions SET ended = ?, abnormal = 1 WHERE id = ?", (now, sid))

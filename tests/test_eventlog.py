@@ -317,12 +317,42 @@ def test_purge_removes_old_ended_sessions(events_db):
         conn.close()
 
 
-def test_reset_keeps_current_session(events_db):
-    eventlog.start_session(pid=111, alive=lambda p: True)
+def test_reset_keeps_unended_sessions_and_removes_ended(events_db):
+    eventlog.start_session(pid=99, alive=lambda p: True)
+    eventlog.end_session()  # 已結束的工作階段會被清掉
+    eventlog.start_session(pid=111, alive=lambda p: True)  # 另一個還開著的實例
+    eventlog.start_session(pid=222, alive=lambda p: True)  # 目前這個實例
     eventlog.reset()
-    eventlog.end_session()
     conn = sqlite3.connect(events_db)
     try:
-        assert conn.execute("SELECT COUNT(*) FROM sessions WHERE ended IS NOT NULL").fetchone()[0] == 1
+        rows = conn.execute("SELECT pid, ended FROM sessions ORDER BY pid").fetchall()
     finally:
         conn.close()
+    assert rows == [(111, None), (222, None)]
+
+
+def test_reset_aborts_when_read_fails(events_db, monkeypatch):
+    eid = eventlog.info("測試", "要保留")
+
+    def boom(_row):
+        raise sqlite3.DatabaseError("讀取失敗")
+    monkeypatch.setattr(eventlog, "_event", boom)
+    with pytest.raises(RuntimeError):
+        eventlog.reset()
+    monkeypatch.undo()
+    assert [e.id for e in eventlog.query()] == [eid]
+    assert not list(eventlog.backup_dir().glob("*.zip"))
+
+
+def test_reset_backup_failure_leaves_no_open_transaction(events_db, monkeypatch):
+    eventlog.info("測試", "要保留")
+    monkeypatch.setattr(eventlog, "export_zip", lambda *a, **k: (_ for _ in ()).throw(OSError("磁碟已滿")))
+    with pytest.raises(OSError):
+        eventlog.reset()
+    assert not eventlog._conn.in_transaction
+
+
+def test_start_session_reports_dead_session_with_reused_pid(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)  # 沒有 end_session
+    ids = eventlog.start_session(pid=111, alive=lambda p: True)  # 同 pid 重用：之前那筆必定是已死的實例
+    assert len(ids) == 1
