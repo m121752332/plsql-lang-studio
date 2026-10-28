@@ -22,6 +22,7 @@ from .batch_dialog import PreviewDialog, ReplaceDialog
 from .compare_model import COL_FIELD, COL_KEY, COL_MASTER, COL_NO, COL_SLAVE, COL_SOURCE, COL_STATUS, \
     CompareFilter, CompareModel
 from .detail_panel import DetailPanel
+from .event_viewer import EventViewer
 from .file_panel import FilePanel
 from .fonts import FontManager
 from .glossary_dialog import APPLY, GlossaryDialog
@@ -284,7 +285,14 @@ class MainWindow(QMainWindow):
             SettingsDialog(self.theme, self.fonts, self.show_events, self).exec()
 
     def show_events(self) -> None:
-        pass  # Task 6 實作
+        """事件檢視器只開一個，再按一次就帶到前面並重新整理。"""
+        if self.event_viewer is None:
+            self.event_viewer = EventViewer(self.theme, self)
+        else:
+            self.event_viewer.refresh()
+        self.event_viewer.show()
+        self.event_viewer.raise_()
+        self.event_viewer.activateWindow()
 
     def show_about(self) -> None:
         QMessageBox.about(self, "關於 PLLangStudio", (

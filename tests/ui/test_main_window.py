@@ -465,3 +465,10 @@ def test_save_failure_dialog_shows_event_id(win, events_db, monkeypatch):
 def test_switching_pair_is_logged(win, events_db):
     win.set_pair("Chinese.lang", "Japanese.lang")
     assert any("Japanese.lang" in e.message for e in eventlog.query(keyword="副語系"))
+
+
+def test_show_events_reuses_one_window(win, events_db):
+    win.show_events()
+    first = win.event_viewer
+    win.show_events()
+    assert win.event_viewer is first and first.isVisible()

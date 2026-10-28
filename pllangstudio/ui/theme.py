@@ -32,6 +32,7 @@ class Colors:
     toast_border: str
     toast_fg: str
     toast_accent: dict  # 提示訊息種類 → 左側色條與圖示的顏色
+    event_level: dict  # 事件檢視器：等級群組 → 文字顏色（資訊用預設色）
     palette: dict  # QPalette.ColorRole → 顏色
 
 
@@ -42,6 +43,7 @@ LIGHT = Colors(
     diff_removed="#ffd7d7", diff_added="#d7f5d7", simplified_bg="#ff8080", simplified_fg="#ffffff",
     toast_bg="#ffffff", toast_border="#d0d0d0", toast_fg="#1a1a1a",
     toast_accent={"success": "#2e8b3e", "info": "#1a5fb4", "warning": "#c77c02"},
+    event_level={"warning": "#b26a00", "error": "#c0392b"},
     palette={QPalette.Window: "#f3f3f3", QPalette.WindowText: "#1a1a1a", QPalette.Base: "#ffffff",
              QPalette.AlternateBase: "#f5f7fa", QPalette.Text: "#1a1a1a", QPalette.Button: "#ececec",
              QPalette.ButtonText: "#1a1a1a", QPalette.ToolTipBase: "#ffffdc", QPalette.ToolTipText: "#1a1a1a",
@@ -56,6 +58,7 @@ DARK = Colors(
     diff_removed="#6e3434", diff_added="#2f5c37", simplified_bg="#d9534f", simplified_fg="#ffffff",
     toast_bg="#2d2f33", toast_border="#45484e", toast_fg="#e6e6e6",
     toast_accent={"success": "#5cc26b", "info": "#6ea8ff", "warning": "#f0b429"},
+    event_level={"warning": "#f0b429", "error": "#ff6b6b"},
     palette={QPalette.Window: "#202124", QPalette.WindowText: "#e6e6e6", QPalette.Base: "#1b1c1f",
              QPalette.AlternateBase: "#26282c", QPalette.Text: "#e6e6e6", QPalette.Button: "#2d2f33",
              QPalette.ButtonText: "#e6e6e6", QPalette.ToolTipBase: "#2d2f33", QPalette.ToolTipText: "#e6e6e6",
