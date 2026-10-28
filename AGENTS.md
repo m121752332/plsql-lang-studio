@@ -11,11 +11,11 @@ pllangstudio/
 ├─ core/   不依賴 Qt 的核心邏輯（加解密、解析、比對、工作區、用語表、檢查）
 ├─ ui/     PySide6 畫面，只負責呈現與操作
 ├─ resources/  靜態檔案（圖示等），用 resources.path("檔名") 取得路徑
-├─ appconfig.py / elevate.py / __main__.py
+├─ appconfig.py / eventlog.py / elevate.py / __main__.py
 tests/
 ├─ core/   核心模組測試
 └─ ui/     pytest-qt 畫面測試
-docs/adr/  架構決策紀錄（0001～0016）
+docs/adr/  架構決策紀錄（0001～0017）
 ```
 
 ## 常用指令

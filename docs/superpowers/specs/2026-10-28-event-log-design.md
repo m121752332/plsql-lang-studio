@@ -1,6 +1,6 @@
 # 事件紀錄與事件檢視器 設計
 
-日期：2026-10-28　狀態：待審閱
+日期：2026-10-28　狀態：已實作
 
 ## 目的
 
@@ -43,7 +43,7 @@
 | 欄位 | 型別 | 說明 |
 |---|---|---|
 | `id` | INTEGER PRIMARY KEY AUTOINCREMENT | **事件編號** |
-| `time` | TEXT | ISO 8601 本地時間（含時區） |
+| `time` | TEXT | ISO 8601 UTC 時間（毫秒），顯示時轉本地時間 |
 | `level` | TEXT | Loguru 等級名稱 |
 | `category` | TEXT | 類別，例如 工作區、匯入、存檔、部署 |
 | `message` | TEXT | 訊息 |
