@@ -282,7 +282,9 @@ class MainWindow(QMainWindow):
 
     def open_settings(self) -> None:
         with self._working():
-            SettingsDialog(self.theme, self.fonts, self.show_events, self).exec()
+            dlg = SettingsDialog(self.theme, self.fonts, self.show_events, self)
+            dlg.exec()
+            dlg.deleteLater()  # 父物件是主視窗，不主動釋放會一直累積
 
     def show_events(self) -> None:
         """事件檢視器只開一個，再按一次就帶到前面並重新整理。"""

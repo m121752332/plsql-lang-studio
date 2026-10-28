@@ -1,5 +1,6 @@
 import sqlite3
 import sys
+import time
 import zipfile
 from datetime import datetime, timedelta, timezone
 
@@ -45,6 +46,26 @@ def test_query_filters_by_group_since_and_keyword(events_db):
 def test_query_by_event_id_ignores_other_filters(events_db):
     eid = eventlog.info("工作區", "開啟")
     assert [e.id for e in eventlog.query({"error"}, keyword=f"#{eid}")] == [eid]
+
+
+def test_locked_database_is_not_treated_as_corrupt(tmp_path):
+    """資料庫被其他實例鎖住時不是損毀：不改名、不丟例外、不久等，只是不記錄。"""
+    db = tmp_path / "events.db"
+    eventlog.setup(db)
+    eventlog.shutdown()
+    other = sqlite3.connect(db, isolation_level=None)
+    try:
+        other.execute("PRAGMA locking_mode=EXCLUSIVE")
+        other.execute("BEGIN EXCLUSIVE")
+        start = time.monotonic()
+        eventlog.setup(db)
+        elapsed = time.monotonic() - start
+        assert not (tmp_path / "events.db.corrupt").exists()
+        assert elapsed < 5
+        assert eventlog.info("程式", "啟動") is None
+    finally:
+        eventlog.shutdown()
+        other.close()
 
 
 def test_corrupt_database_is_quarantined(tmp_path):

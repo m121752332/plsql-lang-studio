@@ -76,7 +76,8 @@ def default_path() -> Path:
 
 def _open(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)  # 自動提交
+    conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None,  # 自動提交
+                           timeout=1)  # 被鎖住時最多等 1 秒，不拖慢啟動
     try:
         conn.execute("PRAGMA journal_mode=WAL")  # 檢視器讀取時不擋住寫入
         conn.executescript(_SCHEMA)
@@ -96,6 +97,8 @@ def setup(db_path: Path, retention: dict[str, int] | None = None) -> None:
     try:
         try:
             conn = _open(db_path)
+        except sqlite3.OperationalError:
+            raise  # 被其他實例鎖住不是損毀，交給外層：只是不記錄
         except sqlite3.DatabaseError:
             appconfig.quarantine(db_path)
             for suffix in ("-wal", "-shm"):

@@ -30,7 +30,7 @@
 | 函式 | 說明 |
 |---|---|
 | `setup(db_path)` | 啟動時呼叫：建立資料表、掛上 sink、依保留天數清除過期紀錄 |
-| `query(levels, since, until, keyword)` | 回傳符合條件的紀錄，新的在前；`keyword` 為 `#數字` 時依事件編號查詢 |
+| `query(groups, since, keyword, limit)` | 回傳符合條件的紀錄，新的在前；`groups` 是等級群組（資訊／警告／錯誤）；`keyword` 為 `#數字` 時依事件編號查詢 |
 | `purge(retention)` | 依各等級群組的保留天數刪除過期紀錄，回傳刪除筆數 |
 | `stats()` | 回傳總筆數與資料庫大小 |
 | `export_zip(records, dest)` | 匯出 zip（內容見「事件檢視器」） |
