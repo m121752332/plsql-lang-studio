@@ -65,6 +65,17 @@ class Event:
         return LEVEL_LABEL.get(self.level, self.level)
 
 
+@dataclass(frozen=True)
+class Summary:
+    counts: dict[str, int]  # 等級群組（info／warning／error）→ 筆數
+    oldest: datetime | None  # 最舊一筆的本地時間；沒有紀錄時是 None
+    size: int  # 資料庫檔案大小 bytes（含 -wal）
+
+    @property
+    def total(self) -> int:
+        return sum(self.counts.values())
+
+
 def _utc(dt: datetime) -> str:
     """存成 UTC 字串，字串大小順序就是時間順序；沒有時區的視為本地時間。"""
     return dt.astimezone(timezone.utc).isoformat(timespec="milliseconds")
@@ -72,6 +83,16 @@ def _utc(dt: datetime) -> str:
 
 def default_path() -> Path:
     return appconfig.data_dir() / "events.db"
+
+
+def log_dir() -> Path:
+    """資料庫所在的資料夾（「開啟紀錄資料夾」用）。"""
+    return (_db_path or default_path()).parent
+
+
+def backup_dir() -> Path:
+    """初始化前的備份放在資料庫旁的 backup 資料夾。"""
+    return log_dir() / "backup"
 
 
 def _open(path: Path) -> sqlite3.Connection:
@@ -240,6 +261,88 @@ def stats() -> tuple[int, int]:
             count = 0
         size = sum(p.stat().st_size for p in (_db_path, _db_path.with_name(_db_path.name + "-wal")) if p.exists())
     return count, size
+
+
+def summary() -> Summary:
+    """各等級群組的筆數、最舊一筆的時間與檔案大小（配置頁顯示用）。"""
+    counts = dict.fromkeys(GROUP_LABEL, 0)
+    oldest = None
+    with _lock:
+        if _conn is not None:
+            try:
+                for level, n in _conn.execute("SELECT level, COUNT(*) FROM events GROUP BY level"):
+                    group = GROUP_OF_LEVEL.get(level)
+                    if group:
+                        counts[group] += n
+                first = _conn.execute("SELECT MIN(time) FROM events").fetchone()[0]
+                oldest = datetime.fromisoformat(first).astimezone() if first else None
+            except sqlite3.Error:
+                pass
+    return Summary(counts, oldest, stats()[1])
+
+
+def _cutoff(days: int, now: datetime | None) -> str:
+    return _utc((now or datetime.now(timezone.utc)) - timedelta(days=days))
+
+
+def count_older_than(days: int, now: datetime | None = None) -> int:
+    with _lock:
+        if _conn is None:
+            return 0
+        try:
+            return _conn.execute("SELECT COUNT(*) FROM events WHERE time < ?", (_cutoff(days, now),)).fetchone()[0]
+        except sqlite3.Error:
+            return 0
+
+
+def delete_older_than(days: int, now: datetime | None = None) -> int:
+    """不分等級刪除 days 天前的紀錄，事件編號不重設；回傳刪除筆數。"""
+    with _lock:
+        if _conn is None:
+            return 0
+        try:
+            return _conn.execute("DELETE FROM events WHERE time < ?", (_cutoff(days, now),)).rowcount
+        except sqlite3.Error:
+            return 0
+
+
+def compact() -> None:
+    """刪除後壓縮資料庫，檔案才會真的變小。其他實例正在用時會失敗，就略過。"""
+    with _lock:
+        if _conn is None:
+            return
+        try:
+            _conn.execute("VACUUM")
+            _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.Error:
+            pass
+
+
+def reset(now: datetime | None = None) -> tuple[int, Path]:
+    """初始化：先把全部紀錄備份成 zip，再清空並把事件編號歸零。
+
+    備份失敗就拋出 OSError，什麼都不刪；回傳（刪除筆數, 備份檔）。
+    """
+    if _conn is None:
+        raise RuntimeError("事件紀錄目前無法使用")
+    now = now or datetime.now()
+    events = query(limit=-1)  # LIMIT -1：全部
+    dest = backup_dir() / f"events-{now:%Y%m%d-%H%M%S}.zip"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    export_zip(events, dest)
+    with _lock:
+        try:
+            _conn.execute("BEGIN")
+            _conn.execute("DELETE FROM events")
+            _conn.execute("DELETE FROM sqlite_sequence WHERE name = 'events'")  # 編號從 1 重新開始
+            _conn.execute("COMMIT")
+        except sqlite3.Error as e:
+            if _conn.in_transaction:
+                _conn.execute("ROLLBACK")
+            raise RuntimeError(f"無法清空事件紀錄：{e}") from e
+    compact()
+    info("事件紀錄", f"事件紀錄已初始化，刪除 {len(events):,} 筆；原紀錄備份在：{dest}")
+    return len(events), dest
 
 
 def format_event(e: Event) -> str:

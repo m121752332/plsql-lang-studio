@@ -4,6 +4,8 @@ import time
 import zipfile
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from pllangstudio import __version__, appconfig, eventlog
 
 
@@ -199,3 +201,75 @@ def test_excepthook_survives_failing_callback(events_db, monkeypatch):
     eventlog.install_excepthook(lambda eid: 1 / 0)
     sys.excepthook(ValueError, ValueError("x"), None)  # 不可再拋出
     assert eventlog.query()[0].level == "CRITICAL"
+
+
+def test_summary_counts_groups_and_oldest(events_db):
+    eventlog.info("測試", "一")
+    eventlog.success("測試", "二")
+    eventlog.warning("測試", "三")
+    eventlog.critical("測試", "四")
+    s = eventlog.summary()
+    assert s.counts == {"info": 2, "warning": 1, "error": 1} and s.total == 4
+    assert abs(s.oldest - datetime.now().astimezone()) < timedelta(minutes=1)
+    assert s.size > 0
+
+
+def test_summary_when_empty(events_db):
+    s = eventlog.summary()
+    assert s.total == 0 and s.oldest is None
+
+
+def test_delete_older_than_keeps_ids(events_db):
+    first = eventlog.info("測試", "舊的")
+    eventlog.error("測試", "舊的錯誤")
+    later = datetime.now(timezone.utc) + timedelta(days=31)
+    assert eventlog.count_older_than(30, now=later) == 2
+    assert eventlog.count_older_than(32, now=later) == 0
+    assert eventlog.delete_older_than(30, now=later) == 2
+    assert eventlog.query() == []
+    assert eventlog.info("測試", "新的") == first + 2  # 編號不重設
+
+
+def test_compact_shrinks_file(events_db):
+    for _ in range(300):
+        eventlog.info("測試", "x" * 2000)
+    eventlog.compact()
+    before = eventlog.stats()[1]
+    eventlog.delete_older_than(0, now=datetime.now(timezone.utc) + timedelta(seconds=1))
+    eventlog.compact()
+    assert eventlog.stats()[1] < before
+
+
+def test_backup_dir_is_next_to_database(events_db):
+    assert eventlog.log_dir() == events_db.parent
+    assert eventlog.backup_dir() == events_db.parent / "backup"
+
+
+def test_reset_backs_up_and_restarts_ids(events_db):
+    eventlog.info("測試", "第一筆")
+    eventlog.error("測試", "第二筆")
+    n, backup = eventlog.reset(now=datetime(2026, 10, 28, 14, 3, 21))
+    assert n == 2 and backup == events_db.parent / "backup" / "events-20261028-140321.zip"
+    with zipfile.ZipFile(backup) as z:
+        text = z.read("events.txt").decode("utf-8")
+    assert "第一筆" in text and "第二筆" in text
+    [e] = eventlog.query()
+    assert e.id == 1 and "已初始化" in e.message and str(backup) in e.message
+    assert eventlog.info("測試", "第三筆") == 2
+
+
+def test_reset_aborts_when_backup_fails(events_db, monkeypatch):
+    eid = eventlog.info("測試", "要保留")
+
+    def boom(*_args, **_kwargs):
+        raise OSError("磁碟已滿")
+    monkeypatch.setattr(eventlog, "export_zip", boom)
+    with pytest.raises(OSError):
+        eventlog.reset()
+    assert [e.id for e in eventlog.query()] == [eid]
+
+
+def test_reset_without_database_raises():
+    eventlog.shutdown()
+    with pytest.raises(RuntimeError):
+        eventlog.reset()
