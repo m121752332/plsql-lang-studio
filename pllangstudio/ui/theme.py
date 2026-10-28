@@ -51,22 +51,25 @@ LIGHT = Colors(
              QPalette.PlaceholderText: "#888888", QPalette.Link: "#1a5fb4"},
 )
 
+# 採用 VS Code 的 GitHub Dark（GitHub Theme 擴充套件的經典版 dark.json）：
+# 內容底色同編輯區 #24292e、視窗同側欄 #1f2428、按鈕同下拉選單 #2f363d、選取同編輯區選取色；
+# 狀態底色是該主題的語意色以 25% 疊在內容底色上，差異標色以 40% 疊上
 DARK = Colors(
-    status={Status.ERROR: "#6a2c2c", Status.MODIFIED: "#24466b", Status.SIMPLIFIED: "#73303a",
-            Status.UNTRANSLATED: "#664a1f", Status.ONE_SIDED: "#3c3d40", Status.DIFFERENT: "#4d4720"},
-    group=("#1e1f22", "#26282c"), master_fg="#a8a8a8", comment_fg="#9a9a9a",
-    diff_removed="#6e3434", diff_added="#2f5c37", simplified_bg="#d9534f", simplified_fg="#ffffff",
-    toast_bg="#2d2f33", toast_border="#45484e", toast_fg="#e6e6e6",
-    toast_accent={"success": "#5cc26b", "info": "#6ea8ff", "warning": "#f0b429"},
-    event_level={"warning": "#f0b429", "error": "#ff6b6b"},
-    palette={QPalette.Window: "#202124", QPalette.WindowText: "#e6e6e6", QPalette.Base: "#1b1c1f",
-             QPalette.AlternateBase: "#26282c", QPalette.Text: "#e6e6e6", QPalette.Button: "#2d2f33",
-             QPalette.ButtonText: "#e6e6e6", QPalette.ToolTipBase: "#2d2f33", QPalette.ToolTipText: "#e6e6e6",
-             QPalette.Highlight: "#3874d8", QPalette.HighlightedText: "#ffffff",
-             QPalette.PlaceholderText: "#8a8a8a", QPalette.Link: "#6ea8ff"},
+    status={Status.ERROR: "#512d35", Status.MODIFIED: "#234162", Status.SIMPLIFIED: "#593c43",
+            Status.UNTRANSLATED: "#593925", Status.ONE_SIDED: "#363c42", Status.DIFFERENT: "#5b5432"},
+    group=("#24292e", "#2b3036"), master_fg="#959da5", comment_fg="#959da5",
+    diff_removed="#6c3039", diff_added="#265b37", simplified_bg="#d73a49", simplified_fg="#ffffff",
+    toast_bg="#2f363d", toast_border="#1b1f23", toast_fg="#e1e4e8",
+    toast_accent={"success": "#34d058", "info": "#79b8ff", "warning": "#ffea7f"},
+    event_level={"warning": "#ffea7f", "error": "#f97583"},
+    palette={QPalette.Window: "#1f2428", QPalette.WindowText: "#d1d5da", QPalette.Base: "#24292e",
+             QPalette.AlternateBase: "#2b3036", QPalette.Text: "#e1e4e8", QPalette.Button: "#2f363d",
+             QPalette.ButtonText: "#e1e4e8", QPalette.ToolTipBase: "#2f363d", QPalette.ToolTipText: "#e1e4e8",
+             QPalette.Highlight: "#284566", QPalette.HighlightedText: "#ffffff",
+             QPalette.PlaceholderText: "#959da5", QPalette.Link: "#79b8ff"},
 )
 
-_DISABLED_TEXT = {False: "#a0a0a0", True: "#6f7175"}
+_DISABLED_TEXT = {False: "#a0a0a0", True: "#6a737d"}
 _current: Colors = LIGHT
 
 
@@ -116,7 +119,9 @@ class ThemeManager(QObject):
         dark = self.is_dark()
         _current = DARK if dark else LIGHT
         self.app.setStyle("Fusion")
-        p = QPalette()
+        # 由按鈕色與視窗色推導外框、分隔線用的立體色，否則會沿用作業系統的深淺色值
+        p = QPalette(QColor(_current.palette[QPalette.Button]), QColor(_current.palette[QPalette.Window]))
+        p.setColor(QPalette.Accent, QColor(_current.palette[QPalette.Highlight]))
         for role, color in _current.palette.items():
             p.setColor(role, QColor(color))
         for role in (QPalette.Text, QPalette.WindowText, QPalette.ButtonText):

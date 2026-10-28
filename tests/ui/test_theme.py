@@ -28,6 +28,18 @@ def test_light_and_dark_switch_palette_and_colors(manager):
     assert not window_is_dark() and theme.colors() is theme.LIGHT
 
 
+@pytest.mark.parametrize("mode, c", [("light", theme.LIGHT), ("dark", theme.DARK)])
+def test_border_and_accent_roles_follow_theme(manager, mode, c):
+    """外框、分隔線用的立體色與強調色要由主題的按鈕色推導，不能沿用作業系統的值。"""
+    from PySide6.QtGui import QColor
+    manager.set_mode(mode)
+    p = QApplication.instance().palette()
+    derived = QPalette(QColor(c.palette[QPalette.Button]), QColor(c.palette[QPalette.Window]))
+    for role in (QPalette.Light, QPalette.Midlight, QPalette.Mid, QPalette.Dark, QPalette.Shadow):
+        assert p.color(role) == derived.color(role), role
+    assert p.color(QPalette.Accent).name() == c.palette[QPalette.Highlight]
+
+
 def test_system_mode_follows_os(manager):
     manager.set_mode("system")
     assert not window_is_dark()
@@ -69,6 +81,25 @@ def test_every_highlighted_status_has_both_colors():
     for c in (theme.LIGHT, theme.DARK):
         assert set(c.status) == {Status.ERROR, Status.MODIFIED, Status.SIMPLIFIED, Status.UNTRANSLATED,
                                  Status.ONE_SIDED, Status.DIFFERENT}
+
+
+def _luminance(hex_color: str) -> float:
+    def channel(v: int) -> float:
+        c = v / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_dark_text_readable_on_every_background():
+    c = theme.DARK
+    for bg in (*c.status.values(), *c.group, c.diff_removed, c.diff_added):
+        assert _contrast(c.palette[QPalette.Text], bg) >= 4.5, bg
 
 
 def test_deleted_manager_ignores_system_change(qtbot, tmp_path, monkeypatch):
