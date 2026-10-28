@@ -7,6 +7,7 @@ from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from langdata import LANG_DIR, needs_lang_dir
+from pllangstudio import eventlog
 from pllangstudio.core import langfile
 from pllangstudio.core.compare import Status
 from pllangstudio.core.langfile import Field
@@ -271,15 +272,19 @@ def menu_texts(menu) -> list[str]:
     return [a.text() for a in menu.actions() if not a.isSeparator()]
 
 
-def test_menu_bar_has_file_edit_about(win):
+def test_menu_bar_has_file_edit_settings_about(win):
     menus = {a.text(): a.menu() for a in win.menuBar().actions()}
-    assert list(menus) == ["檔案(&F)", "編輯(&E)", "關於(&A)"]
+    assert list(menus) == ["檔案(&F)", "編輯(&E)", "配置(&S)", "關於(&A)"]
     assert "💾 加密存檔" in menu_texts(menus["檔案(&F)"]) and "結束" in menu_texts(menus["檔案(&F)"])
     edit = menu_texts(menus["編輯(&E)"])
-    assert {"復原", "重做", "🔍 尋找取代…", "主題"} <= set(edit)
-    theme_menu = next(a.menu() for a in menus["編輯(&E)"].actions() if a.text() == "主題")
-    assert menu_texts(theme_menu) == ["亮色", "暗色", "跟隨系統"]
+    assert {"復原", "重做", "🔍 尋找取代…"} <= set(edit) and "主題" not in edit and "字型" not in edit
+    assert menu_texts(menus["配置(&S)"]) == ["配置…", "事件檢視器…"]
     assert menu_texts(menus["關於(&A)"]) == ["使用說明", "關於 PLLangStudio"]
+
+
+def test_font_shortcuts_still_work(win):
+    shortcuts = {s.toString() for a in win.actions() for s in a.shortcuts()}
+    assert {"Ctrl++", "Ctrl+-", "Ctrl+0"} <= shortcuts
 
 
 def test_shortcuts_are_registered_once(win):
@@ -305,12 +310,11 @@ def test_theme_switch_recolors_table(win):
     from pllangstudio.ui import theme
     i = row_of(win, "定義")  # 主語系「定义」≠ 副語系「定義」→ 不同（黃底）
     cell = win.model.index(i, COL_SLAVE)
-    win.act["theme_dark"].trigger()
+    win.theme.set_mode("dark")
     assert win.model.data(cell, Qt.BackgroundRole).color().name() == theme.DARK.status[Status.DIFFERENT]
     assert QApplication.instance().palette().color(QPalette.Window).name() == theme.DARK.palette[QPalette.Window]
-    win.act["theme_light"].trigger()
+    win.theme.set_mode("light")
     assert win.model.data(cell, Qt.BackgroundRole).color().name() == theme.LIGHT.status[Status.DIFFERENT]
-    assert win.act["theme_light"].isChecked() and not win.act["theme_dark"].isChecked()
 
 
 def test_no_master_slave_wording_in_ui(win):
@@ -435,3 +439,46 @@ def test_ctrl_c_copies_current_cell(win, qtbot):
     win.table.setCurrentIndex(idx)
     qtbot.keyClick(win.table, Qt.Key_C, Qt.ControlModifier)
     assert QApplication.clipboard().text() == win.model.rows[i].source
+
+
+def test_save_success_is_logged(win, events_db):
+    win.model.setData(win.model.index(row_of(win, "&取消"), COL_SLAVE), "&取消X")
+    assert win.save()
+    e = eventlog.query(keyword="Taiwan.lang")[0]
+    assert (e.level, e.category) == ("SUCCESS", "存檔")
+
+
+def test_save_failure_dialog_shows_event_id(win, events_db, monkeypatch):
+    shown = []
+    win.info = lambda title, text, error=False, event_id=None: shown.append((title, text, error, event_id))
+
+    def boom(*_args):
+        raise OSError("磁碟已滿")
+    monkeypatch.setattr(win.ws, "save", boom)
+    win.model.setData(win.model.index(row_of(win, "&取消"), COL_SLAVE), "&取消X")
+    assert not win.save()
+    [e] = eventlog.query({"error"})
+    assert e.category == "存檔" and "磁碟已滿" in e.message and "OSError" in e.detail
+    assert shown[-1][0] == "存檔失敗" and f"事件編號 #{e.id}" in shown[-1][1] and shown[-1][2]
+    assert shown[-1][3] == e.id
+
+
+def test_switching_pair_is_logged(win, events_db):
+    win.set_pair("Chinese.lang", "Japanese.lang")
+    assert any("Japanese.lang" in e.message for e in eventlog.query(keyword="副語系"))
+
+
+def test_show_events_reuses_one_window(win, events_db):
+    win.show_events()
+    first = win.event_viewer
+    win.show_events()
+    assert win.event_viewer is first and first.isVisible()
+
+
+def test_show_events_locates_event_id(win, events_db):
+    eid = eventlog.error("測試", "要找的這筆")
+    eventlog.info("測試", "其他")
+    win.show_events(eid)
+    assert [e.id for e in win.event_viewer.events] == [eid]
+    win.show_events()  # 沒指定編號時保留目前的搜尋條件，只重新整理
+    assert win.event_viewer.search.text() == f"#{eid}"

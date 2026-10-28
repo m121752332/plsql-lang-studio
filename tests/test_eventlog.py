@@ -1,0 +1,358 @@
+import os
+import sqlite3
+import subprocess
+import sys
+import time
+import zipfile
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from pllangstudio import __version__, appconfig, eventlog
+
+
+def test_log_returns_event_id_and_is_queryable(events_db):
+    eid = eventlog.info("存檔", "已存檔 Taiwan.lang")
+    assert isinstance(eid, int)
+    [e] = eventlog.query()
+    assert (e.id, e.level, e.category, e.message, e.app_version) == (eid, "INFO", "存檔", "已存檔 Taiwan.lang", __version__)
+    assert e.level_label == "資訊"
+    assert abs(e.time - datetime.now().astimezone()) < timedelta(minutes=1)
+
+
+def test_error_records_traceback(events_db):
+    try:
+        raise OSError("磁碟已滿")
+    except OSError as exc:
+        eid = eventlog.error("存檔", "存檔失敗", exc)
+    [e] = eventlog.query(keyword=f"#{eid}")
+    assert e.level == "ERROR" and "Traceback" in e.detail and "OSError: 磁碟已滿" in e.detail
+
+
+def test_message_with_braces_is_kept(events_db):
+    eventlog.info("批次修改", "規則 {0} 與 {name}")
+    assert eventlog.query()[0].message == "規則 {0} 與 {name}"
+
+
+def test_query_filters_by_group_since_and_keyword(events_db):
+    eventlog.info("工作區", "開啟工作區")
+    eventlog.warning("存檔", "有警告")
+    eventlog.error("部署", "部署失敗 50%")
+    eventlog.critical("未預期的錯誤", "ZeroDivisionError")
+    assert [e.level for e in eventlog.query({"error"})] == ["CRITICAL", "ERROR"]
+    assert [e.category for e in eventlog.query({"warning", "info"})] == ["存檔", "工作區"]
+    assert [e.message for e in eventlog.query(keyword="50%")] == ["部署失敗 50%"]
+    assert [e.category for e in eventlog.query(keyword="部署")] == ["部署"]
+    assert eventlog.query(set()) == []
+    assert eventlog.query(since=datetime.now() + timedelta(hours=1)) == []
+
+
+def test_query_by_event_id_ignores_other_filters(events_db):
+    eid = eventlog.info("工作區", "開啟")
+    assert [e.id for e in eventlog.query({"error"}, keyword=f"#{eid}")] == [eid]
+
+
+def test_locked_database_is_not_treated_as_corrupt(tmp_path):
+    """資料庫被其他實例鎖住時不是損毀：不改名、不丟例外、不久等，只是不記錄。"""
+    db = tmp_path / "events.db"
+    eventlog.setup(db)
+    eventlog.shutdown()
+    other = sqlite3.connect(db, isolation_level=None)
+    try:
+        other.execute("PRAGMA locking_mode=EXCLUSIVE")
+        other.execute("BEGIN EXCLUSIVE")
+        start = time.monotonic()
+        eventlog.setup(db)
+        elapsed = time.monotonic() - start
+        assert not (tmp_path / "events.db.corrupt").exists()
+        assert elapsed < 5
+        assert eventlog.info("程式", "啟動") is None
+    finally:
+        eventlog.shutdown()
+        other.close()
+
+
+def test_corrupt_database_is_quarantined(tmp_path):
+    db = tmp_path / "events.db"
+    db.write_bytes(b"not a sqlite database" * 100)
+    eventlog.setup(db)
+    try:
+        assert (tmp_path / "events.db.corrupt").exists()
+        assert eventlog.info("程式", "啟動") is not None
+    finally:
+        eventlog.shutdown()
+
+
+def test_unusable_location_does_not_raise(tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("x", encoding="utf-8")
+    eventlog.setup(blocker / "events.db")  # 上層是檔案，建不了資料夾
+    try:
+        assert eventlog.info("程式", "啟動") is None
+        assert eventlog.query() == []
+    finally:
+        eventlog.shutdown()
+
+
+def test_retention_defaults_and_validation(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert appconfig.log_retention() == {"info": 90, "warning": 90, "error": 30}
+    appconfig.remember_log_retention({"info": 7, "warning": 14, "error": 3650})
+    assert appconfig.log_retention() == {"info": 7, "warning": 14, "error": 3650}
+    (tmp_path / "PLLangStudio" / "app.json").write_text(
+        '{"log_days_info": 0, "log_days_warning": "9", "log_days_error": true}', encoding="utf-8")
+    assert appconfig.log_retention() == {"info": 90, "warning": 90, "error": 30}
+
+
+def test_retention_keeps_other_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    appconfig.remember_theme("dark")
+    appconfig.remember_log_retention({"info": 10, "warning": 20, "error": 5})
+    assert appconfig.theme_mode() == "dark"
+
+
+def test_default_path_under_appdata(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert eventlog.default_path() == tmp_path / "PLLangStudio" / "events.db"
+
+
+def test_purge_by_group(events_db):
+    for level in ("INFO", "WARNING", "ERROR", "CRITICAL"):
+        eventlog.log(level, "測試", level)
+    later = datetime.now(timezone.utc) + timedelta(days=31)
+    assert eventlog.purge({"info": 90, "warning": 90, "error": 30}, now=later) == 2
+    assert {e.level for e in eventlog.query()} == {"INFO", "WARNING"}
+    assert eventlog.purge({"info": 30, "warning": 90, "error": 30}, now=later) == 1
+    assert [e.level for e in eventlog.query()] == ["WARNING"]
+
+
+def test_setup_purges_with_retention(tmp_path):
+    db = tmp_path / "events.db"
+    eventlog.setup(db)
+    eventlog.error("測試", "四十天前的錯誤")
+    eventlog.shutdown()
+    conn = sqlite3.connect(db)
+    old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(timespec="milliseconds")
+    conn.execute("UPDATE events SET time = ?", (old,))
+    conn.commit()
+    conn.close()
+    eventlog.setup(db, {"info": 90, "warning": 90, "error": 30})
+    try:
+        assert eventlog.query() == []
+    finally:
+        eventlog.shutdown()
+
+
+def test_stats(events_db):
+    eventlog.info("程式", "啟動")
+    count, size = eventlog.stats()
+    assert count == 1 and size > 0
+
+
+def test_export_zip(events_db, tmp_path):
+    eventlog.info("存檔", "已存檔")
+    try:
+        1 / 0
+    except ZeroDivisionError as exc:
+        eventlog.error("部署", "部署失敗", exc)
+    dest = tmp_path / "events.zip"
+    eventlog.export_zip(eventlog.query(), dest, {"Qt": "6.x"})
+    with zipfile.ZipFile(dest) as z:
+        assert sorted(z.namelist()) == ["events.txt", "system.txt"]
+        events = z.read("events.txt").decode("utf-8")
+        system = z.read("system.txt").decode("utf-8")
+    assert "已存檔" in events and "ZeroDivisionError" in events and "錯誤" in events
+    assert f"程式版本：{__version__}" in system and "Qt：6.x" in system and "筆數：2" in system
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_format_event_has_id_time_level_and_detail(events_db):
+    try:
+        raise ValueError("壞資料")
+    except ValueError as exc:
+        eid = eventlog.error("匯入", "無法匯入", exc)
+    text = eventlog.format_event(eventlog.query()[0])
+    assert text.startswith(f"#{eid}  ") and "錯誤" in text and "[匯入]" in text and "ValueError: 壞資料" in text
+
+
+def test_export_name():
+    assert eventlog.export_name(datetime(2026, 10, 28, 14, 3, 21)) == "PLLangStudio-events-20261028-140321.zip"
+
+
+def test_with_event_id():
+    assert eventlog.with_event_id("存檔失敗", 12) == "存檔失敗\n\n事件編號 #12"
+    assert eventlog.with_event_id("存檔失敗", None) == "存檔失敗"
+
+
+def test_excepthook_logs_critical_and_reports_id(events_db, monkeypatch):
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)  # 測試結束後還原
+    seen = []
+    eventlog.install_excepthook(seen.append)
+    try:
+        raise RuntimeError("壞掉了")
+    except RuntimeError:
+        sys.excepthook(*sys.exc_info())
+    [e] = eventlog.query()
+    assert e.level == "CRITICAL" and "RuntimeError: 壞掉了" in e.message and "Traceback" in e.detail
+    assert seen == [e.id]
+    assert f"#{e.id}" in eventlog.crash_message(e.id)
+
+
+def test_excepthook_survives_failing_callback(events_db, monkeypatch):
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
+    eventlog.install_excepthook(lambda eid: 1 / 0)
+    sys.excepthook(ValueError, ValueError("x"), None)  # 不可再拋出
+    assert eventlog.query()[0].level == "CRITICAL"
+
+
+def test_summary_counts_groups_and_oldest(events_db):
+    eventlog.info("測試", "一")
+    eventlog.success("測試", "二")
+    eventlog.warning("測試", "三")
+    eventlog.critical("測試", "四")
+    s = eventlog.summary()
+    assert s.counts == {"info": 2, "warning": 1, "error": 1} and s.total == 4
+    assert abs(s.oldest - datetime.now().astimezone()) < timedelta(minutes=1)
+    assert s.size > 0
+
+
+def test_summary_when_empty(events_db):
+    s = eventlog.summary()
+    assert s.total == 0 and s.oldest is None
+
+
+def test_delete_older_than_keeps_ids(events_db):
+    first = eventlog.info("測試", "舊的")
+    eventlog.error("測試", "舊的錯誤")
+    later = datetime.now(timezone.utc) + timedelta(days=31)
+    assert eventlog.count_older_than(30, now=later) == 2
+    assert eventlog.count_older_than(32, now=later) == 0
+    assert eventlog.delete_older_than(30, now=later) == 2
+    assert eventlog.query() == []
+    assert eventlog.info("測試", "新的") == first + 2  # 編號不重設
+
+
+def test_compact_shrinks_file(events_db):
+    for _ in range(300):
+        eventlog.info("測試", "x" * 2000)
+    eventlog.compact()
+    before = eventlog.stats()[1]
+    eventlog.delete_older_than(0, now=datetime.now(timezone.utc) + timedelta(seconds=1))
+    eventlog.compact()
+    assert eventlog.stats()[1] < before
+
+
+def test_backup_dir_is_next_to_database(events_db):
+    assert eventlog.log_dir() == events_db.parent
+    assert eventlog.backup_dir() == events_db.parent / "backup"
+
+
+def test_reset_backs_up_and_restarts_ids(events_db):
+    eventlog.info("測試", "第一筆")
+    eventlog.error("測試", "第二筆")
+    n, backup = eventlog.reset(now=datetime(2026, 10, 28, 14, 3, 21))
+    assert n == 2 and backup == events_db.parent / "backup" / "events-20261028-140321.zip"
+    with zipfile.ZipFile(backup) as z:
+        text = z.read("events.txt").decode("utf-8")
+    assert "第一筆" in text and "第二筆" in text
+    [e] = eventlog.query()
+    assert e.id == 1 and "已初始化" in e.message and str(backup) in e.message
+    assert eventlog.info("測試", "第三筆") == 2
+
+
+def test_reset_aborts_when_backup_fails(events_db, monkeypatch):
+    eid = eventlog.info("測試", "要保留")
+
+    def boom(*_args, **_kwargs):
+        raise OSError("磁碟已滿")
+    monkeypatch.setattr(eventlog, "export_zip", boom)
+    with pytest.raises(OSError):
+        eventlog.reset()
+    assert [e.id for e in eventlog.query()] == [eid]
+
+
+def test_reset_without_database_raises():
+    eventlog.shutdown()
+    with pytest.raises(RuntimeError):
+        eventlog.reset()
+
+
+def test_abnormal_exit_detected_on_next_start(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    last = eventlog.info("存檔", "當機前最後一個動作")
+    # 沒有呼叫 end_session 就結束；下次啟動時 111 已不存在
+    ids = eventlog.start_session(pid=222, alive=lambda p: False)
+    [w] = eventlog.query({"warning"})
+    assert ids == [w.id] and w.category == "程式"
+    assert "上次程式未正常結束" in w.message and f"最後一筆紀錄 #{last}" in w.message
+    assert eventlog.start_session(pid=333, alive=lambda p: p == 222) == []  # 同一次異常只報一次
+
+
+def test_clean_exit_is_not_reported(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    eventlog.end_session()
+    assert eventlog.start_session(pid=222, alive=lambda p: False) == []
+
+
+def test_running_instance_is_not_reported(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    assert eventlog.start_session(pid=222, alive=lambda p: p == 111) == []
+
+
+def test_pid_alive():
+    assert eventlog._pid_alive(os.getpid())
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    assert not eventlog._pid_alive(p.pid)
+
+
+def test_purge_removes_old_ended_sessions(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    eventlog.end_session()
+    eventlog.purge({"info": 1, "warning": 1, "error": 1}, now=datetime.now(timezone.utc) + timedelta(days=2))
+    conn = sqlite3.connect(events_db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_reset_keeps_unended_sessions_and_removes_ended(events_db):
+    eventlog.start_session(pid=99, alive=lambda p: True)
+    eventlog.end_session()  # 已結束的工作階段會被清掉
+    eventlog.start_session(pid=111, alive=lambda p: True)  # 另一個還開著的實例
+    eventlog.start_session(pid=222, alive=lambda p: True)  # 目前這個實例
+    eventlog.reset()
+    conn = sqlite3.connect(events_db)
+    try:
+        rows = conn.execute("SELECT pid, ended FROM sessions ORDER BY pid").fetchall()
+    finally:
+        conn.close()
+    assert rows == [(111, None), (222, None)]
+
+
+def test_reset_aborts_when_read_fails(events_db, monkeypatch):
+    eid = eventlog.info("測試", "要保留")
+
+    def boom(_row):
+        raise sqlite3.DatabaseError("讀取失敗")
+    monkeypatch.setattr(eventlog, "_event", boom)
+    with pytest.raises(RuntimeError):
+        eventlog.reset()
+    monkeypatch.undo()
+    assert [e.id for e in eventlog.query()] == [eid]
+    assert not list(eventlog.backup_dir().glob("*.zip"))
+
+
+def test_reset_backup_failure_leaves_no_open_transaction(events_db, monkeypatch):
+    eventlog.info("測試", "要保留")
+    monkeypatch.setattr(eventlog, "export_zip", lambda *a, **k: (_ for _ in ()).throw(OSError("磁碟已滿")))
+    with pytest.raises(OSError):
+        eventlog.reset()
+    assert not eventlog._conn.in_transaction
+
+
+def test_start_session_reports_dead_session_with_reused_pid(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)  # 沒有 end_session
+    ids = eventlog.start_session(pid=111, alive=lambda p: True)  # 同 pid 重用：之前那筆必定是已死的實例
+    assert len(ids) == 1

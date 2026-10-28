@@ -1,4 +1,4 @@
-"""程式本身的設定（上次用的工作區、主題），存在 %APPDATA%\\PLLangStudio\\app.json。"""
+"""程式本身的設定（上次用的工作區、主題、字型、事件紀錄保留天數），存在 %APPDATA%\\PLLangStudio\\app.json。"""
 
 import json
 import os
@@ -8,6 +8,8 @@ from pathlib import Path
 from .core import langfile
 
 THEME_MODES = ("light", "dark", "system")
+LOG_RETENTION_DEFAULT = {"info": 90, "warning": 90, "error": 30}  # 事件紀錄保留天數：資訊／警告／錯誤
+LOG_DAYS_RANGE = (1, 3650)
 
 
 def app_dir() -> Path:
@@ -16,8 +18,13 @@ def app_dir() -> Path:
     return Path.cwd()
 
 
+def data_dir() -> Path:
+    """程式自己的資料（app.json、events.db）放在 %APPDATA%\\PLLangStudio。"""
+    return Path(os.environ.get("APPDATA", Path.home())) / "PLLangStudio"
+
+
 def _config_path() -> Path:
-    return Path(os.environ.get("APPDATA", Path.home())) / "PLLangStudio" / "app.json"
+    return data_dir() / "app.json"
 
 
 def quarantine(p: Path) -> None:
@@ -83,3 +90,18 @@ def font_size() -> int:
 
 def remember_font(family: str, size: int) -> None:
     _update(font_family=family, font_size=size)
+
+
+def log_retention() -> dict[str, int]:
+    """事件紀錄各等級群組的保留天數；沒設定或不合法時用預設值。"""
+    data = _load()
+    result = {}
+    for group, default in LOG_RETENTION_DEFAULT.items():
+        value = data.get(f"log_days_{group}")
+        ok = isinstance(value, int) and not isinstance(value, bool) and LOG_DAYS_RANGE[0] <= value <= LOG_DAYS_RANGE[1]
+        result[group] = value if ok else default
+    return result
+
+
+def remember_log_retention(retention: dict[str, int]) -> None:
+    _update(**{f"log_days_{group}": int(retention[group]) for group in LOG_RETENTION_DEFAULT})

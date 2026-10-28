@@ -15,3 +15,13 @@ def lang_copy(tmp_path):
         dst.write_bytes((LANG_DIR / name).read_bytes())
         return dst
     return _copy
+
+
+@pytest.fixture
+def events_db(tmp_path):
+    """在暫存資料夾啟用事件紀錄，測試結束時關閉，不碰真實的 %APPDATA%。"""
+    from pllangstudio import eventlog
+    db = tmp_path / "events.db"
+    eventlog.setup(db)
+    yield db
+    eventlog.shutdown()
