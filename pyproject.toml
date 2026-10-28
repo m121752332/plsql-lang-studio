@@ -12,6 +12,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 # 執行時期依賴
 dependencies = [
+    "loguru>=0.7.3",    # 事件紀錄
     "opencc>=1.4.2",    # 簡繁中文轉換
     "pyside6>=6.12.0",  # Qt 圖形介面
 ]
