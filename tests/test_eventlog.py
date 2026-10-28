@@ -67,3 +67,58 @@ def test_unusable_location_does_not_raise(tmp_path):
         assert eventlog.query() == []
     finally:
         eventlog.shutdown()
+
+
+def test_retention_defaults_and_validation(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert appconfig.log_retention() == {"info": 90, "warning": 90, "error": 30}
+    appconfig.remember_log_retention({"info": 7, "warning": 14, "error": 3650})
+    assert appconfig.log_retention() == {"info": 7, "warning": 14, "error": 3650}
+    (tmp_path / "PLLangStudio" / "app.json").write_text(
+        '{"log_days_info": 0, "log_days_warning": "9", "log_days_error": true}', encoding="utf-8")
+    assert appconfig.log_retention() == {"info": 90, "warning": 90, "error": 30}
+
+
+def test_retention_keeps_other_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    appconfig.remember_theme("dark")
+    appconfig.remember_log_retention({"info": 10, "warning": 20, "error": 5})
+    assert appconfig.theme_mode() == "dark"
+
+
+def test_default_path_under_appdata(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert eventlog.default_path() == tmp_path / "PLLangStudio" / "events.db"
+
+
+def test_purge_by_group(events_db):
+    for level in ("INFO", "WARNING", "ERROR", "CRITICAL"):
+        eventlog.log(level, "測試", level)
+    later = datetime.now(timezone.utc) + timedelta(days=31)
+    assert eventlog.purge({"info": 90, "warning": 90, "error": 30}, now=later) == 2
+    assert {e.level for e in eventlog.query()} == {"INFO", "WARNING"}
+    assert eventlog.purge({"info": 30, "warning": 90, "error": 30}, now=later) == 1
+    assert [e.level for e in eventlog.query()] == ["WARNING"]
+
+
+def test_setup_purges_with_retention(tmp_path):
+    db = tmp_path / "events.db"
+    eventlog.setup(db)
+    eventlog.error("測試", "四十天前的錯誤")
+    eventlog.shutdown()
+    conn = sqlite3.connect(db)
+    old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(timespec="milliseconds")
+    conn.execute("UPDATE events SET time = ?", (old,))
+    conn.commit()
+    conn.close()
+    eventlog.setup(db, {"info": 90, "warning": 90, "error": 30})
+    try:
+        assert eventlog.query() == []
+    finally:
+        eventlog.shutdown()
+
+
+def test_stats(events_db):
+    eventlog.info("程式", "啟動")
+    count, size = eventlog.stats()
+    assert count == 1 and size > 0

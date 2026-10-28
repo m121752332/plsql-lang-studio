@@ -5,12 +5,11 @@
 
 from __future__ import annotations
 
-import os
 import sqlite3
 import threading
 import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from loguru import logger
@@ -65,6 +64,10 @@ def _utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def default_path() -> Path:
+    return appconfig.data_dir() / "events.db"
+
+
 def _open(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)  # 自動提交
@@ -97,6 +100,8 @@ def setup(db_path: Path, retention: dict[str, int] | None = None) -> None:
     _conn, _db_path = conn, db_path
     logger.remove()  # 視窗程式沒有主控台，不要 Loguru 預設的 stderr 輸出
     _handler_id = logger.add(_sink, level="DEBUG", catch=False)
+    if retention:
+        purge(retention)
 
 
 def shutdown() -> None:
@@ -195,3 +200,34 @@ def query(groups=("info", "warning", "error"), since: datetime | None = None, ke
         except sqlite3.Error:
             return []
     return [_event(r) for r in rows]
+
+
+def purge(retention: dict[str, int], now: datetime | None = None) -> int:
+    """依各等級群組的保留天數刪除過期紀錄，回傳刪除筆數。"""
+    now = now or datetime.now(timezone.utc)
+    removed = 0
+    with _lock:
+        if _conn is None:
+            return 0
+        try:
+            for group, days in retention.items():
+                levels = [lv for lv, g in GROUP_OF_LEVEL.items() if g == group]
+                removed += _conn.execute(
+                    f"DELETE FROM events WHERE time < ? AND level IN ({','.join('?' * len(levels))})",
+                    [_utc(now - timedelta(days=days)), *levels]).rowcount
+        except sqlite3.Error:
+            pass
+    return removed
+
+
+def stats() -> tuple[int, int]:
+    """回傳（總筆數, 資料庫檔案大小 bytes，含 -wal）。"""
+    with _lock:
+        if _conn is None or _db_path is None:
+            return 0, 0
+        try:
+            count = _conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        except sqlite3.Error:
+            count = 0
+        size = sum(p.stat().st_size for p in (_db_path, _db_path.with_name(_db_path.name + "-wal")) if p.exists())
+    return count, size
