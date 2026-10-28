@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplic
                                QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
                                QSplitter, QTableView, QToolButton, QVBoxLayout, QWidget)
 
-from .. import __version__, appconfig, elevate
+from .. import __version__, appconfig, elevate, eventlog
 from ..core import batch, compare, langfile
 from ..core.compare import STATUS_LABEL, Status
 from ..core.langfile import LangFormatError
@@ -297,10 +297,16 @@ class MainWindow(QMainWindow):
     def _info(self, title: str, text: str, error: bool = False) -> None:
         (QMessageBox.warning if error else QMessageBox.information)(self, title, text)
 
+    def _error(self, category: str, title: str, text: str, exc: BaseException | None = None) -> None:
+        """錯誤一律記進事件紀錄，對話框附上事件編號，回報問題時用。"""
+        eid = eventlog.error(category, f"{title}：{text}", exc)
+        self.info(title, eventlog.with_event_id(text, eid), error=True)
+
     # ---------- 工作區 ----------
 
     def open_workspace(self, root: Path) -> None:
         self.ws = Workspace(root)
+        eventlog.info("工作區", f"開啟工作區：{self.ws.root}")
         appconfig.remember_workspace(self.ws.root)
         self.ws_label.setText(f" 工作區：{self.ws.root} ")
         if not self.ws.installed_dir.is_dir():
@@ -317,7 +323,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.ws.import_lang(n)
                 except (OSError, ValueError) as e:
-                    self.info("無法匯入", f"{n}\n\n{e}", error=True)
+                    self._error("匯入", "無法匯入", f"{n}\n\n{e}", e)
         self.master_name = self.slave_name = ""
         self.set_pair(self.ws.settings.master, self.ws.settings.slave, confirm=False)
 
@@ -335,6 +341,7 @@ class MainWindow(QMainWindow):
         if d:
             self.ws.settings.plsql_lang_dir = d
             self.ws.save_settings()
+            eventlog.info("工作區", f"PL/SQL 語言目錄改為：{d}")
             self.refresh_files()
 
     def refresh_files(self) -> None:
@@ -369,8 +376,9 @@ class MainWindow(QMainWindow):
                     return
                 self.ws.import_lang(name, overwrite=True)
         except (OSError, ValueError) as e:  # LangFormatError 也是 ValueError
-            self.info("無法匯入", f"{name}\n\n{e}", error=True)
+            self._error("匯入", "無法匯入", f"{name}\n\n{e}", e)
             return
+        eventlog.info("匯入", f"已匯入 {name}")
         if is_open:  # 正在看的檔案被換掉了，強制重新載入
             master, slave = self.master_name, self.slave_name
             self.master_name = self.slave_name = ""
@@ -381,8 +389,8 @@ class MainWindow(QMainWindow):
     def remove_lang(self, name: str) -> None:
         with self._working():
             if name in (self.master_name, self.slave_name):
-                self.info("無法移除", f"{name} 目前是{'主語系' if name == self.master_name else '副語系'}，"
-                          "請先切換到別的檔案再移除。", error=True)
+                self._error("移除", "無法移除", f"{name} 目前是{'主語系' if name == self.master_name else '副語系'}，"
+                            "請先切換到別的檔案再移除。")
                 return
             info = next((i for i in self.ws.list_workspace() if i.name == name), None)
             if info is None:
@@ -394,14 +402,16 @@ class MainWindow(QMainWindow):
             try:
                 self.ws.remove_lang(name)
             except OSError as e:
-                self.info("無法移除", f"{name}\n\n{e}", error=True)
+                self._error("移除", "無法移除", f"{name}\n\n{e}", e)
+            else:
+                eventlog.info("移除", f"已從工作區移除 {name}")
             self.refresh_files()
 
     def _ensure_imported(self, name: str) -> bool:
         if (self.ws.lang_dir / name).exists():
             return True
         if not (self.ws.installed_dir / name).exists():
-            self.info("找不到檔案", name, error=True)
+            self._error("匯入", "找不到檔案", name)
             return False
         if self.ask("尚未匯入", f"{name} 還沒匯入工作區，要現在匯入嗎？") != QMessageBox.Yes:
             return False
@@ -439,7 +449,7 @@ class MainWindow(QMainWindow):
         try:
             m, s = self.ws.load(master), self.ws.load(slave)
         except (LangFormatError, ValueError) as e:
-            self.info("無法開啟", str(e), error=True)
+            self._error("開啟", "無法開啟", str(e), e)
             return
         self.master_name, self.slave_name = master, slave
         self.ws.settings.master, self.ws.settings.slave = master, slave
@@ -452,15 +462,17 @@ class MainWindow(QMainWindow):
                 backup = self.ws.backup_txt(slave)
                 self.model.load(m, s, exceptions)
                 self.ws.sync_txt(slave, s)
-                self.info(".txt 無法讀取，已改用 .lang", f"{slave} 對應的 .txt 讀取失敗：{e}\n\n"
-                          f"原本的 .txt 已備份到：\n{backup}", error=True)
+                self._error("記事本", ".txt 無法讀取，已改用 .lang", f"{slave} 對應的 .txt 讀取失敗：{e}\n\n"
+                            f"原本的 .txt 已備份到：\n{backup}", e)
             else:
                 self.model.load(m, new, exceptions, baseline=s)
+                eventlog.info("記事本", f"{slave} 的 .txt 跟 .lang 不同，已載入 .txt 的內容")
                 self.toast("info", "已載入記事本的修改", f"{slave} 對應的 .txt 跟 .lang 不同，已載入 .txt 的內容。\n"
                            "修改標示為 ✎，尚未存檔。")
         else:
             self.model.load(m, s, exceptions)
             self.ws.sync_txt(slave, s)
+        eventlog.info("開啟", f"主語系 {master}，副語系 {slave}，共 {self.model.rowCount():,} 列")
         self.setWindowTitle(f"PLLangStudio — {master} ↔ {slave}")
         self.refresh_files()
         self.select_row(self.model.row_of_key(key) if key else 0)
@@ -506,7 +518,7 @@ class MainWindow(QMainWindow):
             self.model.request_edit(edits, label)
             return True
         except ValueError as e:
-            self.info("無法套用修改", str(e), error=True)
+            self._error("編輯", "無法套用修改", str(e), e)
             return False
 
     # ---------- 存檔／部署 ----------
@@ -520,7 +532,7 @@ class MainWindow(QMainWindow):
         if errors:
             lines = [f"第 {i + 1} 列：{'；'.join(x.message for x in self.model.issues[i] if x.level == 'error')}"
                      for i in errors[:10]]
-            self.info("有錯誤，不能存檔", "\n".join(lines) + ("\n…" if len(errors) > 10 else ""), error=True)
+            self._error("存檔", "有錯誤，不能存檔", "\n".join(lines) + ("\n…" if len(errors) > 10 else ""))
             self.proxy.set_status(Status.ERROR)
             self.filter_buttons[Status.ERROR].setChecked(True)
             self.select_row(errors[0])
@@ -529,12 +541,14 @@ class MainWindow(QMainWindow):
         if warnings and self.ask("有警告", f"修改過的字串中有 {warnings} 個有警告（可在「警告」篩選查看）。\n仍要存檔嗎？") \
                 != QMessageBox.Yes:
             return False
+        count = self.model.modified_count()
         try:
             self.ws.save(self.slave_name, self.model.slave)
         except OSError as e:
-            self.info("存檔失敗", f"{self.slave_name} 沒有存成功：{e}", error=True)
+            self._error("存檔", "存檔失敗", f"{self.slave_name} 沒有存成功：{e}", e)
             return False
         self.model.mark_saved()
+        eventlog.success("存檔", f"已加密存檔到工作區：{self.slave_name}（{count} 個字串修改）")
         self.refresh_files()
         self.toast("success", "已存檔", f"已加密存檔到工作區：{self.slave_name}")
         return True
@@ -564,12 +578,13 @@ class MainWindow(QMainWindow):
         try:
             res = self.ws.deploy(self.slave_name, self.elevate_fn)
         except (OSError, ValueError) as e:
-            self.info("部署失敗", f"{self.slave_name} 沒有部署成功：{e}", error=True)
+            self._error("部署", "部署失敗", f"{self.slave_name} 沒有部署成功：{e}", e)
             return
         if res.ok:
+            eventlog.success("部署", f"{self.slave_name}：{res.message}")
             self.toast("success", "已部署", res.message)
         else:
-            self.info("部署結果", res.message, error=True)
+            self._error("部署", "部署結果", res.message)
         self.refresh_files()
 
     # ---------- 記事本 ----------
@@ -594,11 +609,11 @@ class MainWindow(QMainWindow):
             new = self.ws.load_txt(name)
         except UnicodeDecodeError:
             self.ws.acknowledge_txt(name)
-            self.info(".txt 編碼錯誤", "請在記事本用「另存新檔」，編碼選 UTF-8 後再存一次。", error=True)
+            self._error("記事本", ".txt 編碼錯誤", "請在記事本用「另存新檔」，編碼選 UTF-8 後再存一次。")
             return
         except LangFormatError as e:
             self.ws.acknowledge_txt(name)
-            self.info(".txt 格式錯誤，沒有載入", f"{e}\n\n請修正後再存一次。", error=True)
+            self._error("記事本", ".txt 格式錯誤，沒有載入", f"{e}\n\n請修正後再存一次。", e)
             return
         if self.model.modified_count() and self.ask(
                 "兩邊都有修改", "表格和記事本都有尚未存檔的修改。\n\n是 → 改用記事本的內容（表格的修改會被捨棄）\n否 → 保留表格的修改（記事本的修改會被覆蓋）") \
@@ -609,6 +624,7 @@ class MainWindow(QMainWindow):
         key = self.model.rows[cur].key if cur is not None else None
         self.model.load(self.model.master, new, self.model.exceptions, baseline=self.ws.load(name))
         self.select_row(self.model.row_of_key(key) if key else 0)
+        eventlog.info("記事本", f"已從記事本重新載入 {name}")
         self.toast("info", "已從記事本重新載入", f"{name} 的修改標示為 ✎，尚未存檔。")
 
     # ---------- 批次 ----------
@@ -621,7 +637,9 @@ class MainWindow(QMainWindow):
             dlg = PreviewDialog(title, changes, self)
             if dlg.exec():
                 edits = [(self.model.row_of_ref(c.row.ref), c.after) for c in dlg.checked()]
-                self.apply_edits([e for e in edits if e[0] is not None], title)
+                applied = [e for e in edits if e[0] is not None]
+                if self.apply_edits(applied, title):
+                    eventlog.info("批次修改", f"{title}：套用 {len(applied)} 個字串")
 
     def find_replace(self) -> None:
         with self._working():
@@ -632,7 +650,7 @@ class MainWindow(QMainWindow):
                                                     dlg.find.text(), dlg.replace.text(), dlg.regex.isChecked(),
                                                     dlg.case.isChecked())
                 except Exception as e:  # 規則運算式寫錯
-                    self.info("尋找取代", f"規則運算式有誤：{e}", error=True)
+                    self._error("批次修改", "尋找取代", f"規則運算式有誤：{e}", e)
                     return
                 self._apply_changes("尋找取代", changes)
 
@@ -648,6 +666,7 @@ class MainWindow(QMainWindow):
             if result in (1, APPLY):
                 g = dlg.glossary()
                 self.ws.save_glossary(g)
+                eventlog.info("用語對照表", f"用語對照表已儲存，共 {len(g.rules)} 條規則")
                 self.model.exceptions = g.simplified_exceptions
                 if result == APPLY:
                     self._apply_changes("套用用語表", batch.preview_rules(

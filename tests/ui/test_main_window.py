@@ -7,6 +7,7 @@ from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from langdata import LANG_DIR, needs_lang_dir
+from pllangstudio import eventlog
 from pllangstudio.core import langfile
 from pllangstudio.core.compare import Status
 from pllangstudio.core.langfile import Field
@@ -435,3 +436,29 @@ def test_ctrl_c_copies_current_cell(win, qtbot):
     win.table.setCurrentIndex(idx)
     qtbot.keyClick(win.table, Qt.Key_C, Qt.ControlModifier)
     assert QApplication.clipboard().text() == win.model.rows[i].source
+
+
+def test_save_success_is_logged(win, events_db):
+    win.model.setData(win.model.index(row_of(win, "&取消"), COL_SLAVE), "&取消X")
+    assert win.save()
+    e = eventlog.query(keyword="Taiwan.lang")[0]
+    assert (e.level, e.category) == ("SUCCESS", "存檔")
+
+
+def test_save_failure_dialog_shows_event_id(win, events_db, monkeypatch):
+    shown = []
+    win.info = lambda title, text, error=False: shown.append((title, text, error))
+
+    def boom(*_args):
+        raise OSError("磁碟已滿")
+    monkeypatch.setattr(win.ws, "save", boom)
+    win.model.setData(win.model.index(row_of(win, "&取消"), COL_SLAVE), "&取消X")
+    assert not win.save()
+    [e] = eventlog.query({"error"})
+    assert e.category == "存檔" and "磁碟已滿" in e.message and "OSError" in e.detail
+    assert shown[-1][0] == "存檔失敗" and f"事件編號 #{e.id}" in shown[-1][1] and shown[-1][2]
+
+
+def test_switching_pair_is_logged(win, events_db):
+    win.set_pair("Chinese.lang", "Japanese.lang")
+    assert any("Japanese.lang" in e.message for e in eventlog.query(keyword="副語系"))
