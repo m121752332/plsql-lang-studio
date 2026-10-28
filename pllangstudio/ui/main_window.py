@@ -27,6 +27,7 @@ from .font_dialog import FontDialog
 from .fonts import FontManager
 from .glossary_dialog import APPLY, GlossaryDialog
 from .theme import MODE_LABEL, ThemeManager
+from .toast import ToastHost
 
 FILTERS = [(None, "全部"), (Status.DIFFERENT, None), (Status.SIMPLIFIED, None), (Status.UNTRANSLATED, None),
            (Status.ONE_SIDED, None), (Status.ERROR, None), (Status.WARNING, None), (Status.MODIFIED, None)]
@@ -79,7 +80,7 @@ class CompareTable(QTableView):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None,
+    def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None, toast=None,
                  theme_manager: ThemeManager | None = None, font_manager: FontManager | None = None):
         super().__init__()
         self.theme = theme_manager or ThemeManager(QApplication.instance(), parent=self)
@@ -87,6 +88,8 @@ class MainWindow(QMainWindow):
         self.elevate_fn = elevate_fn
         self.ask = ask or self._ask  # 測試時可以換掉對話框
         self.info = info or self._info
+        self.toast_host = ToastHost(self)
+        self.toast = toast or self.toast_host.show
         self.undo_stack = QUndoStack(self)
         self.model = CompareModel(self.undo_stack, self)
         self.proxy = CompareFilter(self)
@@ -422,7 +425,7 @@ class MainWindow(QMainWindow):
         if (master, slave) == (self.master_name, self.slave_name):
             return
         if master == slave:
-            self.info("不能選同一個檔案", f"主語系和副語系都是 {master}。\n主語系是比對基準（唯讀），請選另一個檔案當副語系。")
+            self.toast("warning", "不能選同一個檔案", f"主語系和副語系都是 {master}。\n主語系是比對基準（唯讀），請選另一個檔案當副語系。")
             self.refresh_files()
             return
         if confirm and not self.confirm_discard():
@@ -453,8 +456,8 @@ class MainWindow(QMainWindow):
                           f"原本的 .txt 已備份到：\n{backup}", error=True)
             else:
                 self.model.load(m, new, exceptions, baseline=s)
-                self.info("已載入記事本的修改", f"{slave} 對應的 .txt 跟 .lang 不同，已載入 .txt 的內容。\n"
-                          "修改標示為 ✎，尚未存檔。")
+                self.toast("info", "已載入記事本的修改", f"{slave} 對應的 .txt 跟 .lang 不同，已載入 .txt 的內容。\n"
+                           "修改標示為 ✎，尚未存檔。")
         else:
             self.model.load(m, s, exceptions)
             self.ws.sync_txt(slave, s)
@@ -533,7 +536,7 @@ class MainWindow(QMainWindow):
             return False
         self.model.mark_saved()
         self.refresh_files()
-        self.statusBar().showMessage(f"已加密存檔到工作區：{self.slave_name}", 5000)
+        self.toast("success", "已存檔", f"已加密存檔到工作區：{self.slave_name}")
         return True
 
     def deploy(self) -> None:
@@ -563,7 +566,10 @@ class MainWindow(QMainWindow):
         except (OSError, ValueError) as e:
             self.info("部署失敗", f"{self.slave_name} 沒有部署成功：{e}", error=True)
             return
-        self.info("部署結果", res.message, error=not res.ok)
+        if res.ok:
+            self.toast("success", "已部署", res.message)
+        else:
+            self.info("部署結果", res.message, error=True)
         self.refresh_files()
 
     # ---------- 記事本 ----------
@@ -603,13 +609,13 @@ class MainWindow(QMainWindow):
         key = self.model.rows[cur].key if cur is not None else None
         self.model.load(self.model.master, new, self.model.exceptions, baseline=self.ws.load(name))
         self.select_row(self.model.row_of_key(key) if key else 0)
-        self.statusBar().showMessage("已從記事本重新載入", 5000)
+        self.toast("info", "已從記事本重新載入", f"{name} 的修改標示為 ✎，尚未存檔。")
 
     # ---------- 批次 ----------
 
     def _apply_changes(self, title: str, changes: list[batch.Change]) -> None:
         if not changes:
-            self.info(title, "沒有需要修改的字串。")
+            self.toast("info", title, "沒有需要修改的字串。")
             return
         with self._working():
             dlg = PreviewDialog(title, changes, self)

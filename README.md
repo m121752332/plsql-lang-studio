@@ -537,17 +537,18 @@ uv 會建立 `.venv\` 資料夾，並安裝所有套件（包含測試與打包�
 | 只跑某個資料夾的測試 | `uv run pytest tests/core` | 只測核心邏輯（比較快，不需要畫面） |
 | 只跑名稱含某個字的測試 | `uv run pytest -k glossary` | 只跑名稱裡有 `glossary` 的測試 |
 | 把警告也當成錯誤 | `uv run pytest -W error` | 正式發佈前建議用這個，確保測試輸出乾淨 |
-| **打包成 exe** | 見下方 | 產生 `dist\PLLangStudio.exe` |
+| **打包成 exe** | `uv run build` | 產生 `dist\PLLangStudio.exe`，見下方 |
+| **產生發行用 zip** | `uv run package` | 先打包 exe，再壓成 `bin\PLLangStudio-v版本號-win64.zip`，見下方 |
 | 查看 Python 版本 | `uv run python --version` | 應該顯示 `Python 3.14.x` |
 | 查看程式版本 | `uv run python -c "import pllangstudio; print(pllangstudio.__version__)"` | 例如 `0.2.0` |
 
 ### 打包成 exe
 
 ```powershell
-uv run pyinstaller --noconfirm --onefile --windowed --collect-all opencc --name PLLangStudio --specpath build pllangstudio/__main__.py
+uv run build
 ```
 
-每個參數的意思：
+`build` 是寫在 `pyproject.toml` 的 `[project.scripts]` 裡的指令捷徑，實際內容在 [pllangstudio/release.py](pllangstudio/release.py)，等於執行 PyInstaller 並帶入下列參數：
 
 | 參數 | 意思 |
 |---|---|
@@ -555,6 +556,8 @@ uv run pyinstaller --noconfirm --onefile --windowed --collect-all opencc --name 
 | `--onefile` | 打包成**單一個** exe，方便複製 |
 | `--windowed` | 執行時不要跳出黑色的命令列視窗 |
 | `--collect-all opencc` | 把 OpenCC 的字典檔一起包進去。⚠️ **不能省略**，否則 exe 裡的簡轉繁會找不到字典 |
+| `--add-data`（`pllangstudio\resources`） | 把靜態檔案（圖示等）一起包進去，視窗左上角與工作列才有圖示 |
+| `--icon`（`pllangstudio\resources\app.ico`） | exe 檔案本身在檔案總管裡顯示的圖示 |
 | `--name PLLangStudio` | exe 的名稱 |
 | `--specpath build` | 把自動產生的 `PLLangStudio.spec` 放在 `build\` 底下，不弄亂專案根目錄 |
 | `pllangstudio/__main__.py` | 程式的進入點 |
@@ -563,6 +566,14 @@ uv run pyinstaller --noconfirm --onefile --windowed --collect-all opencc --name 
 
 - 成品在 **`dist\PLLangStudio.exe`**，約 52 MB，大約需要一分鐘。
 - 打包過程的暫存檔和 `PLLangStudio.spec` 都在 `build\`，可以刪掉，下次打包會重新產生。
+
+### 產生發行用 zip
+
+```powershell
+uv run package
+```
+
+先做一次上面的 `uv run build`，再把 `PLLangStudio.exe`、`README.md`、`LICENSE` 壓成 **`bin\PLLangStudio-v版本號-win64.zip`**。版本號取自 `pyproject.toml`，所以發行新版前記得先改版本號；同版本的舊 zip 會被覆蓋。
 
 > ⚠️ 打包前請先**關閉正在執行的 PLLangStudio.exe**，否則舊的 exe 被占用，沒辦法覆蓋。
 

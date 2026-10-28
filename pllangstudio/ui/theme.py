@@ -28,6 +28,10 @@ class Colors:
     diff_added: str  # 副語系新增或改過的字
     simplified_bg: str  # 殘留簡體字
     simplified_fg: str
+    toast_bg: str  # 提示訊息卡片
+    toast_border: str
+    toast_fg: str
+    toast_accent: dict  # 提示訊息種類 → 左側色條與圖示的顏色
     palette: dict  # QPalette.ColorRole → 顏色
 
 
@@ -36,6 +40,8 @@ LIGHT = Colors(
             Status.UNTRANSLATED: "#ffe2bf", Status.ONE_SIDED: "#e4e4e4", Status.DIFFERENT: "#fff6c8"},
     group=("#ffffff", "#f5f7fa"), master_fg="#555555", comment_fg="#666666",
     diff_removed="#ffd7d7", diff_added="#d7f5d7", simplified_bg="#ff8080", simplified_fg="#ffffff",
+    toast_bg="#ffffff", toast_border="#d0d0d0", toast_fg="#1a1a1a",
+    toast_accent={"success": "#2e8b3e", "info": "#1a5fb4", "warning": "#c77c02"},
     palette={QPalette.Window: "#f3f3f3", QPalette.WindowText: "#1a1a1a", QPalette.Base: "#ffffff",
              QPalette.AlternateBase: "#f5f7fa", QPalette.Text: "#1a1a1a", QPalette.Button: "#ececec",
              QPalette.ButtonText: "#1a1a1a", QPalette.ToolTipBase: "#ffffdc", QPalette.ToolTipText: "#1a1a1a",
@@ -48,6 +54,8 @@ DARK = Colors(
             Status.UNTRANSLATED: "#664a1f", Status.ONE_SIDED: "#3c3d40", Status.DIFFERENT: "#4d4720"},
     group=("#1e1f22", "#26282c"), master_fg="#a8a8a8", comment_fg="#9a9a9a",
     diff_removed="#6e3434", diff_added="#2f5c37", simplified_bg="#d9534f", simplified_fg="#ffffff",
+    toast_bg="#2d2f33", toast_border="#45484e", toast_fg="#e6e6e6",
+    toast_accent={"success": "#5cc26b", "info": "#6ea8ff", "warning": "#f0b429"},
     palette={QPalette.Window: "#202124", QPalette.WindowText: "#e6e6e6", QPalette.Base: "#1b1c1f",
              QPalette.AlternateBase: "#26282c", QPalette.Text: "#e6e6e6", QPalette.Button: "#2d2f33",
              QPalette.ButtonText: "#e6e6e6", QPalette.ToolTipBase: "#2d2f33", QPalette.ToolTipText: "#e6e6e6",

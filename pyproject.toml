@@ -3,7 +3,7 @@
 # 套件名稱
 name = "pllangstudio"
 # 版本號（發行時請同步更新 git tag，例如 v0.1.0）
-version = "0.2.0"
+version = "0.3.0"
 # 專案簡述
 description = "PL/SQL Developer 語言編輯與比對器"
 # 說明文件
@@ -15,6 +15,20 @@ dependencies = [
     "opencc>=1.4.2",    # 簡繁中文轉換
     "pyside6>=6.12.0",  # Qt 圖形介面
 ]
+
+# 指令捷徑：uv run build 產生 exe；uv run package 產生 exe 後再壓成 bin\ 底下的 zip
+[project.scripts]
+build = "pllangstudio.release:build"
+package = "pllangstudio.release:package"
+
+# 要有建置後端，uv 才會把本專案裝進 .venv，上面的指令捷徑才能用
+[build-system]
+requires = ["uv_build>=0.11.18,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pllangstudio"
+module-root = ""  # 套件在專案根目錄，不是 src\ 底下
 
 # 開發用依賴群組（uv sync 預設會安裝）
 [dependency-groups]

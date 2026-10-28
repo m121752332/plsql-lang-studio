@@ -32,10 +32,11 @@ def env(tmp_path, monkeypatch):
 @pytest.fixture
 def win(qtbot, env, monkeypatch):
     root, _ = env
-    answers = []
+    answers, toasts = [], []
     w = MainWindow(root, elevate_fn=lambda s, d: False, info=lambda *a, **k: None,
-                   ask=lambda *a, **k: answers.pop(0) if answers else QMessageBox.Yes)
-    w.answers = answers
+                   ask=lambda *a, **k: answers.pop(0) if answers else QMessageBox.Yes,
+                   toast=lambda *a, **k: toasts.append(a))
+    w.answers, w.toasts_shown = answers, toasts
     qtbot.addWidget(w)
     return w
 
@@ -69,8 +70,23 @@ def test_edit_save_and_deploy(win, env):
     assert win.model.modified_count() == 0
     saved = langfile.load(root / "lang" / "Taiwan.lang")
     assert any(e.target[Field.CAPTION] == ["&取消X"] for e in saved.entries)
+    assert win.toasts_shown[-1][0] == "success"
+    win.toasts_shown.clear()
     win.deploy()
     assert (installed / "Taiwan.lang").read_bytes() == (root / "lang" / "Taiwan.lang").read_bytes()
+    assert [t[0] for t in win.toasts_shown] == ["success"]
+
+
+def test_save_shows_toast_on_window(qtbot, env):
+    """沒有注入 toast 時，提示訊息出現在主視窗右下角。"""
+    root, _ = env
+    w = MainWindow(root, elevate_fn=lambda s, d: False, info=lambda *a, **k: None,
+                   ask=lambda *a, **k: QMessageBox.Yes)
+    qtbot.addWidget(w)
+    w.show()
+    w.model.setData(w.model.index(row_of(w, "&取消"), COL_SLAVE), "&取消X")
+    assert w.save()
+    assert [t.title_label.text() for t in w.toast_host.toasts] == ["已存檔"]
 
 
 def test_save_blocked_by_placeholder_error(win, env):
@@ -89,6 +105,7 @@ def test_notepad_edit_is_reloaded_and_marked(win, env):
     win.poll_txt()
     i = row_of(win, "&取消N")
     assert Status.MODIFIED in win.model.status[i]
+    assert win.toasts_shown[-1][0] == "info"
 
 
 def test_conflict_keeps_table_when_user_says_no(win, env):
@@ -163,10 +180,11 @@ def test_close_asks_when_edits_pending(win):
     assert ev.isAccepted()
 
 
-def _open(qtbot, root, calls=None):
+def _open(qtbot, root, calls=None, toasts=None):
     w = MainWindow(root, elevate_fn=lambda s, d: False,
                    info=(lambda *a, **k: calls.append((a, k))) if calls is not None else (lambda *a, **k: None),
-                   ask=lambda *a, **k: QMessageBox.Yes)
+                   ask=lambda *a, **k: QMessageBox.Yes,
+                   toast=(lambda *a, **k: toasts.append(a)) if toasts is not None else (lambda *a, **k: None))
     qtbot.addWidget(w)
     return w
 
@@ -177,12 +195,12 @@ def test_txt_edited_while_closed_is_loaded_not_overwritten(qtbot, env):
     first.close()
     txt = root / "txt" / "Taiwan.txt"
     txt.write_bytes(txt.read_bytes().replace("&取消".encode(), "&取消N".encode(), 1))
-    calls = []
-    w = _open(qtbot, root, calls)
+    toasts = []
+    w = _open(qtbot, root, toasts=toasts)
     i = row_of(w, "&取消N")
     assert Status.MODIFIED in w.model.status[i]
     assert "&取消N" in txt.read_text(encoding="utf-8-sig")
-    assert any(a[0] == "已載入記事本的修改" for a, _ in calls)
+    assert any(t[:2] == ("info", "已載入記事本的修改") for t in toasts)
 
 
 def test_malformed_txt_at_open_is_backed_up_and_replaced(qtbot, env):
@@ -321,10 +339,9 @@ def test_combos_widen_for_longer_names_after_shown(win, qtbot):
 
 
 def test_pair_rejects_same_file(win):
-    shown = []
-    win.info = lambda *a, **k: shown.append(a)
     win.set_pair("Taiwan.lang", "Taiwan.lang")
-    assert (win.master_name, win.slave_name) == ("Chinese.lang", "Taiwan.lang") and shown
+    assert (win.master_name, win.slave_name) == ("Chinese.lang", "Taiwan.lang")
+    assert win.toasts_shown[-1][0] == "warning"
 
 
 def test_combos_disable_the_other_side(win):

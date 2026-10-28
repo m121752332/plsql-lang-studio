@@ -10,11 +10,12 @@ PLLangStudio：檢視、比對、修改 PL/SQL Developer 介面翻譯（`.lang` 
 pllangstudio/
 ├─ core/   不依賴 Qt 的核心邏輯（加解密、解析、比對、工作區、用語表、檢查）
 ├─ ui/     PySide6 畫面，只負責呈現與操作
+├─ resources/  靜態檔案（圖示等），用 resources.path("檔名") 取得路徑
 ├─ appconfig.py / elevate.py / __main__.py
 tests/
 ├─ core/   核心模組測試
 └─ ui/     pytest-qt 畫面測試
-docs/adr/  架構決策紀錄（0001～0014）
+docs/adr/  架構決策紀錄（0001～0016）
 ```
 
 ## 常用指令
@@ -27,6 +28,8 @@ docs/adr/  架構決策紀錄（0001～0014）
 | 執行程式 | `uv run python -m pllangstudio` |
 | 跑全部測試 | `uv run pytest`（預設已用 xdist 平行，約 11 秒） |
 | 單獨除錯某個測試 | `uv run pytest -n0 路徑::測試名` |
+| 打包成 exe | `uv run build`（產生 `dist\PLLangStudio.exe`） |
+| 產生發行 zip | `uv run package`（build 後壓成 `bin\PLLangStudio-v版本號-win64.zip`） |
 | 加依賴 | `uv add 套件`；開發用加 `--dev` |
 
 ## 架構規則
