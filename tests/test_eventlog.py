@@ -122,3 +122,59 @@ def test_stats(events_db):
     eventlog.info("程式", "啟動")
     count, size = eventlog.stats()
     assert count == 1 and size > 0
+
+
+def test_export_zip(events_db, tmp_path):
+    eventlog.info("存檔", "已存檔")
+    try:
+        1 / 0
+    except ZeroDivisionError as exc:
+        eventlog.error("部署", "部署失敗", exc)
+    dest = tmp_path / "events.zip"
+    eventlog.export_zip(eventlog.query(), dest, {"Qt": "6.x"})
+    with zipfile.ZipFile(dest) as z:
+        assert sorted(z.namelist()) == ["events.txt", "system.txt"]
+        events = z.read("events.txt").decode("utf-8")
+        system = z.read("system.txt").decode("utf-8")
+    assert "已存檔" in events and "ZeroDivisionError" in events and "錯誤" in events
+    assert f"程式版本：{__version__}" in system and "Qt：6.x" in system and "筆數：2" in system
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_format_event_has_id_time_level_and_detail(events_db):
+    try:
+        raise ValueError("壞資料")
+    except ValueError as exc:
+        eid = eventlog.error("匯入", "無法匯入", exc)
+    text = eventlog.format_event(eventlog.query()[0])
+    assert text.startswith(f"#{eid}  ") and "錯誤" in text and "[匯入]" in text and "ValueError: 壞資料" in text
+
+
+def test_export_name():
+    assert eventlog.export_name(datetime(2026, 10, 28, 14, 3, 21)) == "PLLangStudio-events-20261028-140321.zip"
+
+
+def test_with_event_id():
+    assert eventlog.with_event_id("存檔失敗", 12) == "存檔失敗\n\n事件編號 #12"
+    assert eventlog.with_event_id("存檔失敗", None) == "存檔失敗"
+
+
+def test_excepthook_logs_critical_and_reports_id(events_db, monkeypatch):
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)  # 測試結束後還原
+    seen = []
+    eventlog.install_excepthook(seen.append)
+    try:
+        raise RuntimeError("壞掉了")
+    except RuntimeError:
+        sys.excepthook(*sys.exc_info())
+    [e] = eventlog.query()
+    assert e.level == "CRITICAL" and "RuntimeError: 壞掉了" in e.message and "Traceback" in e.detail
+    assert seen == [e.id]
+    assert f"#{e.id}" in eventlog.crash_message(e.id)
+
+
+def test_excepthook_survives_failing_callback(events_db, monkeypatch):
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
+    eventlog.install_excepthook(lambda eid: 1 / 0)
+    sys.excepthook(ValueError, ValueError("x"), None)  # 不可再拋出
+    assert eventlog.query()[0].level == "CRITICAL"

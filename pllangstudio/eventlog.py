@@ -5,16 +5,22 @@
 
 from __future__ import annotations
 
+import io
+import platform
 import sqlite3
+import sys
 import threading
 import traceback
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 from loguru import logger
 
 from . import __version__, appconfig
+from .core import langfile
 
 GROUP_OF_LEVEL = {"TRACE": "info", "DEBUG": "info", "INFO": "info", "SUCCESS": "info",
                   "WARNING": "warning", "ERROR": "error", "CRITICAL": "error"}
@@ -231,3 +237,56 @@ def stats() -> tuple[int, int]:
             count = 0
         size = sum(p.stat().st_size for p in (_db_path, _db_path.with_name(_db_path.name + "-wal")) if p.exists())
     return count, size
+
+
+def format_event(e: Event) -> str:
+    head = f"#{e.id}  {e.time:%Y-%m-%d %H:%M:%S}  {e.level_label}  [{e.category}]  {e.message}"
+    return head + (f"\n{e.detail.rstrip()}" if e.detail else "")
+
+
+def system_info(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """回報問題時附上的環境資訊；Qt 版本由畫面層透過 extra 帶入（本模組不 import Qt）。"""
+    info = {"程式版本": __version__, "Python": platform.python_version(), "作業系統": platform.platform()}
+    info.update(extra or {})
+    return info
+
+
+def export_name(now: datetime) -> str:
+    return f"PLLangStudio-events-{now:%Y%m%d-%H%M%S}.zip"
+
+
+def export_zip(events: list[Event], dest: Path, extra: dict[str, str] | None = None) -> None:
+    """匯出成 zip（events.txt＋system.txt），不含語言檔內容。先寫 .tmp 再換檔。"""
+    lines = [f"{k}：{v}" for k, v in system_info(extra).items()]
+    lines += [f"匯出時間：{datetime.now():%Y-%m-%d %H:%M:%S}", f"筆數：{len(events)}"]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("events.txt", "\n\n".join(format_event(e) for e in events) + "\n")
+        z.writestr("system.txt", "\n".join(lines) + "\n")
+    langfile.atomic_write(Path(dest), buf.getvalue())
+
+
+def with_event_id(text: str, event_id: int | None) -> str:
+    """錯誤對話框的訊息附上事件編號，回報問題時用。"""
+    return text if event_id is None else f"{text}\n\n事件編號 #{event_id}"
+
+
+def crash_message(event_id: int | None) -> str:
+    text = "發生未預期的錯誤。"
+    if event_id is not None:
+        text += f"（事件編號 #{event_id}）\n\n回報問題時請提供此編號，並從「配置 ▸ 事件檢視器」匯出紀錄。"
+    return text
+
+
+def install_excepthook(on_crash: Callable[[int | None], None]) -> None:
+    """未預期的例外記成嚴重錯誤，再交給 on_crash 顯示事件編號。"""
+    def hook(exc_type, exc, tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc, tb)
+            return
+        eid = critical("未預期的錯誤", f"{exc_type.__name__}: {exc}", (exc_type, exc, tb))
+        try:
+            on_crash(eid)
+        except Exception:
+            pass
+    sys.excepthook = hook
