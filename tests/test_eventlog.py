@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import subprocess
 import sys
 import time
 import zipfile
@@ -273,3 +275,54 @@ def test_reset_without_database_raises():
     eventlog.shutdown()
     with pytest.raises(RuntimeError):
         eventlog.reset()
+
+
+def test_abnormal_exit_detected_on_next_start(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    last = eventlog.info("存檔", "當機前最後一個動作")
+    # 沒有呼叫 end_session 就結束；下次啟動時 111 已不存在
+    ids = eventlog.start_session(pid=222, alive=lambda p: False)
+    [w] = eventlog.query({"warning"})
+    assert ids == [w.id] and w.category == "程式"
+    assert "上次程式未正常結束" in w.message and f"最後一筆紀錄 #{last}" in w.message
+    assert eventlog.start_session(pid=333, alive=lambda p: p == 222) == []  # 同一次異常只報一次
+
+
+def test_clean_exit_is_not_reported(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    eventlog.end_session()
+    assert eventlog.start_session(pid=222, alive=lambda p: False) == []
+
+
+def test_running_instance_is_not_reported(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    assert eventlog.start_session(pid=222, alive=lambda p: p == 111) == []
+
+
+def test_pid_alive():
+    assert eventlog._pid_alive(os.getpid())
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    assert not eventlog._pid_alive(p.pid)
+
+
+def test_purge_removes_old_ended_sessions(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    eventlog.end_session()
+    eventlog.purge({"info": 1, "warning": 1, "error": 1}, now=datetime.now(timezone.utc) + timedelta(days=2))
+    conn = sqlite3.connect(events_db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_reset_keeps_current_session(events_db):
+    eventlog.start_session(pid=111, alive=lambda p: True)
+    eventlog.reset()
+    eventlog.end_session()
+    conn = sqlite3.connect(events_db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM sessions WHERE ended IS NOT NULL").fetchone()[0] == 1
+    finally:
+        conn.close()

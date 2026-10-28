@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import io
+import os
 import platform
 import sqlite3
 import sys
@@ -40,6 +41,13 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_time ON events(time);
 CREATE INDEX IF NOT EXISTS events_level ON events(level);
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pid INTEGER NOT NULL,
+    started TEXT NOT NULL,
+    ended TEXT,
+    abnormal INTEGER NOT NULL DEFAULT 0
+);
 """
 _COLUMNS = "id, time, level, category, message, detail, app_version"
 
@@ -48,6 +56,7 @@ _conn: sqlite3.Connection | None = None
 _db_path: Path | None = None
 _handler_id: int | None = None
 _last_id: int | None = None
+_session_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -136,7 +145,7 @@ def setup(db_path: Path, retention: dict[str, int] | None = None) -> None:
 
 def shutdown() -> None:
     """停止記錄並關閉資料庫（測試結束、程式結束時呼叫）。"""
-    global _conn, _db_path, _handler_id
+    global _conn, _db_path, _handler_id, _session_id
     if _handler_id is not None:
         logger.remove(_handler_id)
         _handler_id = None
@@ -144,6 +153,7 @@ def shutdown() -> None:
         if _conn is not None:
             _conn.close()
         _conn, _db_path = None, None
+        _session_id = None
 
 
 def _sink(message) -> None:
@@ -245,6 +255,9 @@ def purge(retention: dict[str, int], now: datetime | None = None) -> int:
                 removed += _conn.execute(
                     f"DELETE FROM events WHERE time < ? AND level IN ({','.join('?' * len(levels))})",
                     [_utc(now - timedelta(days=days)), *levels]).rowcount
+            if retention:  # 已結束的工作階段保留到最長的保留天數
+                _conn.execute("DELETE FROM sessions WHERE ended IS NOT NULL AND ended < ?",
+                              (_utc(now - timedelta(days=max(retention.values()))),))
         except sqlite3.Error:
             pass
     return removed
@@ -335,6 +348,7 @@ def reset(now: datetime | None = None) -> tuple[int, Path]:
             _conn.execute("BEGIN")
             _conn.execute("DELETE FROM events")
             _conn.execute("DELETE FROM sqlite_sequence WHERE name = 'events'")  # 編號從 1 重新開始
+            _conn.execute("DELETE FROM sessions WHERE id != ?", (_session_id or -1,))
             _conn.execute("COMMIT")
         except sqlite3.Error as e:
             if _conn.in_transaction:
@@ -382,6 +396,69 @@ def crash_message(event_id: int | None) -> str:
     if event_id is not None:
         text += f"（事件編號 #{event_id}）\n\n回報問題時請提供此編號，並從「配置 ▸ 事件檢視器」匯出紀錄。"
     return text
+
+
+def _pid_alive(pid: int) -> bool:
+    """程序是否還在執行；用來分辨「另一個實例還開著」和「上次異常結束」。"""
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        return True
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def start_session(pid: int | None = None, alive: Callable[[int], bool] | None = None) -> list[int]:
+    """記下這次的工作階段。先找出上次沒有正常結束、程序也已不存在的，各記一筆警告；回傳那些警告的事件編號。"""
+    global _session_id
+    pid = os.getpid() if pid is None else pid
+    alive = alive or _pid_alive
+    now = _utc(datetime.now(timezone.utc))
+    found: list[tuple[str, int | None]] = []
+    with _lock:
+        if _conn is None:
+            return []
+        try:
+            for sid, other, started in _conn.execute(
+                    "SELECT id, pid, started FROM sessions WHERE ended IS NULL").fetchall():
+                if other == pid or alive(other):
+                    continue
+                last = _conn.execute("SELECT MAX(id) FROM events WHERE time >= ?", (started,)).fetchone()[0]
+                _conn.execute("UPDATE sessions SET ended = ?, abnormal = 1 WHERE id = ?", (now, sid))
+                found.append((started, last))
+            _session_id = _conn.execute("INSERT INTO sessions (pid, started) VALUES (?, ?)", (pid, now)).lastrowid
+        except sqlite3.Error:
+            return []
+    ids = []
+    for started, last in found:
+        tail = f"，最後一筆紀錄 #{last}" if last else ""
+        eid = warning("程式", f"上次程式未正常結束（開始於 {datetime.fromisoformat(started).astimezone():%Y-%m-%d %H:%M:%S}{tail}）")
+        if eid is not None:
+            ids.append(eid)
+    return ids
+
+
+def end_session() -> None:
+    """正常結束時標記工作階段，下次啟動才不會當成異常結束。"""
+    global _session_id
+    with _lock:
+        if _conn is not None and _session_id is not None:
+            try:
+                _conn.execute("UPDATE sessions SET ended = ? WHERE id = ?",
+                              (_utc(datetime.now(timezone.utc)), _session_id))
+            except sqlite3.Error:
+                pass
+        _session_id = None
 
 
 def install_excepthook(on_crash: Callable[[int | None], None]) -> None:

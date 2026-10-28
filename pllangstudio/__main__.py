@@ -16,6 +16,7 @@ def main() -> int:
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PLLangStudio")
     eventlog.setup(eventlog.default_path(), appconfig.log_retention())  # 越早越好，後面出錯才記得到
+    eventlog.start_session()  # 會順便記下上次是否異常結束
     eventlog.info("程式", f"PLLangStudio {__version__} 啟動（{platform.platform()}）")
     app = QApplication(sys.argv)
     app.setApplicationName("PLLangStudio")
@@ -29,6 +30,7 @@ def main() -> int:
     win = MainWindow(root, theme_manager=theme, font_manager=fonts)
     win.show()
     code = app.exec()
+    eventlog.end_session()  # app.exec() 拋出例外時不會執行到，下次啟動就會記成異常結束
     eventlog.shutdown()
     return code
 
