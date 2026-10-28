@@ -22,6 +22,7 @@ from .batch_dialog import PreviewDialog, ReplaceDialog
 from .compare_model import COL_FIELD, COL_KEY, COL_MASTER, COL_NO, COL_SLAVE, COL_SOURCE, COL_STATUS, \
     CompareFilter, CompareModel
 from .detail_panel import DetailPanel
+from .error_box import error_box
 from .event_viewer import EventViewer
 from .file_panel import FilePanel
 from .fonts import FontManager
@@ -286,12 +287,13 @@ class MainWindow(QMainWindow):
             dlg.exec()
             dlg.deleteLater()  # 父物件是主視窗，不主動釋放會一直累積
 
-    def show_events(self) -> None:
-        """事件檢視器只開一個，再按一次就帶到前面並重新整理。"""
+    def show_events(self, event_id: int | None = None) -> None:
+        """事件檢視器只開一個，再按一次就帶到前面並重新整理；指定事件編號時直接列出那一筆。"""
         if self.event_viewer is None:
             self.event_viewer = EventViewer(self.theme, self)
-        else:
-            self.event_viewer.refresh()
+        if event_id is not None:
+            self.event_viewer.search.setText(f"#{event_id}")
+        self.event_viewer.refresh()
         self.event_viewer.show()
         self.event_viewer.raise_()
         self.event_viewer.activateWindow()
@@ -305,13 +307,16 @@ class MainWindow(QMainWindow):
              default=QMessageBox.No) -> QMessageBox.StandardButton:
         return QMessageBox.question(self, title, text, buttons, default)
 
-    def _info(self, title: str, text: str, error: bool = False) -> None:
+    def _info(self, title: str, text: str, error: bool = False, event_id: int | None = None) -> None:
+        if event_id is not None:
+            error_box(self, title, text, event_id, self.show_events).exec()
+            return
         (QMessageBox.warning if error else QMessageBox.information)(self, title, text)
 
     def _error(self, category: str, title: str, text: str, exc: BaseException | None = None) -> None:
         """錯誤一律記進事件紀錄，對話框附上事件編號，回報問題時用。"""
         eid = eventlog.error(category, f"{title}：{text}", exc)
-        self.info(title, eventlog.with_event_id(text, eid), error=True)
+        self.info(title, eventlog.with_event_id(text, eid), error=True, event_id=eid)
 
     # ---------- 工作區 ----------
 

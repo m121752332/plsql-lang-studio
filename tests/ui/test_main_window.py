@@ -450,7 +450,7 @@ def test_save_success_is_logged(win, events_db):
 
 def test_save_failure_dialog_shows_event_id(win, events_db, monkeypatch):
     shown = []
-    win.info = lambda title, text, error=False: shown.append((title, text, error))
+    win.info = lambda title, text, error=False, event_id=None: shown.append((title, text, error, event_id))
 
     def boom(*_args):
         raise OSError("磁碟已滿")
@@ -460,6 +460,7 @@ def test_save_failure_dialog_shows_event_id(win, events_db, monkeypatch):
     [e] = eventlog.query({"error"})
     assert e.category == "存檔" and "磁碟已滿" in e.message and "OSError" in e.detail
     assert shown[-1][0] == "存檔失敗" and f"事件編號 #{e.id}" in shown[-1][1] and shown[-1][2]
+    assert shown[-1][3] == e.id
 
 
 def test_switching_pair_is_logged(win, events_db):
@@ -472,3 +473,12 @@ def test_show_events_reuses_one_window(win, events_db):
     first = win.event_viewer
     win.show_events()
     assert win.event_viewer is first and first.isVisible()
+
+
+def test_show_events_locates_event_id(win, events_db):
+    eid = eventlog.error("測試", "要找的這筆")
+    eventlog.info("測試", "其他")
+    win.show_events(eid)
+    assert [e.id for e in win.event_viewer.events] == [eid]
+    win.show_events()  # 沒指定編號時保留目前的搜尋條件，只重新整理
+    assert win.event_viewer.search.text() == f"#{eid}"
