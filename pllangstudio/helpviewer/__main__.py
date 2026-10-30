@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from pllangstudio import resources
 from pllangstudio.core.helpdoc import THEMES, parse_command
-from pllangstudio.helpviewer.window import HelpWindow, StdinBridge
+from pllangstudio.helpviewer.window import HelpWindow, StdinBridge, chromium_flags, text_scale_factor
 
 
 def main() -> int:
@@ -21,14 +21,14 @@ def main() -> int:
     if sys.platform == "win32":
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PLLangStudio.Help")
-    # Chromium 偵測到視窗被主程式蓋住時會停止繪製，帶到前面後可能一直是黑畫面或舊畫面，關掉這個偵測
-    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
-    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = f"{flags} --disable-features=CalculateNativeWinOcclusion".strip()
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)  # Qt WebEngine 要求在建立 QApplication 前設定
     app = QApplication(sys.argv[:1])
     app.setApplicationName("PLLangHelp")
     app.setWindowIcon(QIcon(str(resources.path("app.ico"))))
-    win = HelpWindow(resources.path("help/index.html"), args.topic, args.theme)
+    # 要知道 Qt 的縮放比例才能設定，Qt WebEngine 在建立第一個網頁元件時才讀取這些參數
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = chromium_flags(
+        os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", ""), app.primaryScreen().devicePixelRatio())
+    win = HelpWindow(resources.path("help/index.html"), args.topic, args.theme, zoom=text_scale_factor())
     win.show()
     bridge = StdinBridge()
     if args.listen and sys.stdin is not None:

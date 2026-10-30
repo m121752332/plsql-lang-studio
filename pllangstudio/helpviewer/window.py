@@ -16,6 +16,32 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from ..core.helpdoc import Command, help_url, normalize_topic
 
 
+def chromium_flags(existing: str, dpr: float) -> str:
+    """說明程式要加給 Chromium 的參數。
+
+    - 縮放比例固定成 Qt 的值：Windows「協助工具 ▸ 文字大小」不是 100% 時，Chromium 會把它算進縮放比例，
+      Qt 卻不會，Chromium 畫出的畫面被 Qt 用最近鄰縮小，每隔十幾列就掉一列，細的橫筆畫和框線會消失。
+      文字大小改由 HelpWindow 的 zoom 補回來。
+    - 關閉視窗遮蔽偵測：被主程式蓋住後帶到前面，可能一直是黑畫面或舊畫面。
+    """
+    ours = f"--force-device-scale-factor={dpr:g} --disable-features=CalculateNativeWinOcclusion"
+    return f"{existing} {ours}".strip()
+
+
+def _read_text_scale() -> int:
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Accessibility") as key:
+        return winreg.QueryValueEx(key, "TextScaleFactor")[0]
+
+
+def text_scale_factor() -> float:
+    """Windows「協助工具 ▸ 文字大小」，1.0 表示沒有放大；沒有這個設定（或不是 Windows）時為 1.0。"""
+    try:
+        return _read_text_scale() / 100
+    except (OSError, ImportError):
+        return 1.0
+
+
 class HelpPage(QWebEnginePage):
     """只在視窗內顯示本機網頁，其他連結（GitHub 等）交給系統瀏覽器。"""
 
@@ -32,9 +58,10 @@ class HelpPage(QWebEnginePage):
 
 class HelpWindow(QWebEngineView):
     def __init__(self, index: Path, topic: str | None, theme: str,
-                 open_url: Callable[[QUrl], object] = QDesktopServices.openUrl):
+                 open_url: Callable[[QUrl], object] = QDesktopServices.openUrl, zoom: float = 1.0):
         super().__init__()
         self.setPage(HelpPage(self, open_url))
+        self.setZoomFactor(zoom)  # 依 Windows 文字大小放大，見 chromium_flags
         self.setWindowTitle("PLLangStudio 使用說明")
         self.resize(1100, 760)
         self.topic, self.theme = normalize_topic(topic), theme

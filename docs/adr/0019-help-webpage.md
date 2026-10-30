@@ -25,4 +25,5 @@ status: accepted
 - 網頁內容與 README 分開維護，改功能時兩邊都要更新。
 - 說明程式從 stdin 讀指令時直接用 `os.read` 讀檔案描述元：若在 daemon 執行緒裡卡在 `sys.stdin` 讀取，使用者先關掉說明視窗時，Python 結束會出現 Fatal Python error。
 - 說明程式關閉 Chromium 的視窗遮蔽偵測（`--disable-features=CalculateNativeWinOcclusion`），否則被主程式蓋住後再帶到前面，可能一直是黑畫面或舊畫面。
+- 說明程式把 Chromium 的縮放比例固定成 Qt 的值（`--force-device-scale-factor`）。Windows「協助工具 ▸ 文字大小」不是 100% 時，Chromium 會把它算進縮放比例（例如 107% 時為 1.07），Qt 卻不會；Chromium 畫出較大的畫面後被 Qt 用最近鄰縮進視窗，每隔十幾列就掉一列，「一」這類細的橫筆畫與 1px 框線會消失。文字大小改用網頁縮放（`zoomFactor`）補回，排版會重新計算，不會破圖。主程式的 Qt 介面不受這個設定影響。縮放比例在啟動時依主螢幕決定，把說明視窗拖到縮放比例不同的螢幕時可能會模糊。
 - Windows 不讓背景行程自己搶到前景，主程式送 `show` 指令前會呼叫 `AllowSetForegroundWindow` 授權。

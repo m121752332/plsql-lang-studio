@@ -8,7 +8,8 @@ from PySide6.QtWebEngineCore import QWebEnginePage
 
 from pllangstudio import resources
 from pllangstudio.core.helpdoc import Command
-from pllangstudio.helpviewer.window import HelpPage, HelpWindow, StdinBridge
+from pllangstudio.helpviewer import window
+from pllangstudio.helpviewer.window import HelpPage, HelpWindow, StdinBridge, chromium_flags
 
 INDEX = resources.path("help/index.html")
 
@@ -60,6 +61,34 @@ def test_search_filters_sections(viewer, qtbot):
                  "[...document.querySelectorAll('main > section:not(.hidden)')].map(s => s.id).join(',')")
     assert "save-deploy" in visible.split(",") and "glossary" not in visible.split(",")
     assert js(viewer, qtbot, "document.querySelectorAll('mark').length") > 0
+
+
+def test_chromium_flags_pin_scale_to_qt():
+    """Windows「文字大小」不是 100% 時，Chromium 會用不同於 Qt 的縮放繪製，畫面被拉伸而掉列（破圖）。"""
+    flags = chromium_flags("", 1.25)
+    assert "--force-device-scale-factor=1.25" in flags.split()
+    assert "--disable-features=CalculateNativeWinOcclusion" in flags.split()
+
+
+def test_chromium_flags_keep_existing():
+    assert chromium_flags("--foo", 1.0).split()[0] == "--foo"
+
+
+@pytest.mark.parametrize("value, expected", [(107, 1.07), (100, 1.0), (None, 1.0)])
+def test_text_scale_factor(monkeypatch, value, expected):
+    def fake_read():
+        if value is None:
+            raise OSError("沒有這個設定")
+        return value
+    monkeypatch.setattr(window, "_read_text_scale", fake_read)
+    assert window.text_scale_factor() == pytest.approx(expected)
+
+
+def test_zoom_applies_to_page(qtbot):
+    w = HelpWindow(INDEX, None, "light", zoom=1.07)
+    qtbot.addWidget(w)
+    qtbot.waitUntil(lambda: w.ready, timeout=20000)
+    assert w.zoomFactor() == pytest.approx(1.07)
 
 
 def test_external_links_open_in_system_browser(qtbot):
