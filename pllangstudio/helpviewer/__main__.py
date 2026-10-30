@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 
 from PySide6.QtCore import QCoreApplication, Qt
@@ -20,6 +21,9 @@ def main() -> int:
     if sys.platform == "win32":
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PLLangStudio.Help")
+    # Chromium 偵測到視窗被主程式蓋住時會停止繪製，帶到前面後可能一直是黑畫面或舊畫面，關掉這個偵測
+    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = f"{flags} --disable-features=CalculateNativeWinOcclusion".strip()
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)  # Qt WebEngine 要求在建立 QApplication 前設定
     app = QApplication(sys.argv[:1])
     app.setApplicationName("PLLangHelp")
@@ -34,7 +38,7 @@ def main() -> int:
                 win.apply(cmd)
         bridge.received.connect(on_line)
         bridge.closed.connect(app.quit)  # 主程式關閉，說明視窗跟著關
-        bridge.start(sys.stdin.buffer)
+        bridge.start(sys.stdin.fileno())
     return app.exec()
 
 

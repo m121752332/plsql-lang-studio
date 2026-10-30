@@ -1,4 +1,6 @@
-import io
+import os
+import subprocess
+import sys
 
 import pytest
 from PySide6.QtCore import QUrl
@@ -74,6 +76,24 @@ def test_stdin_bridge_emits_lines_then_closed(qtbot):
     bridge = StdinBridge()
     lines = []
     bridge.received.connect(lines.append)
+    r, w = os.pipe()
     with qtbot.waitSignal(bridge.closed, timeout=5000):
-        bridge.start(io.BytesIO("show glossary dark\ntheme light\n".encode("utf-8")))
-    assert lines == ["show glossary dark\n", "theme light\n"]
+        bridge.start(r)
+        os.write(w, "show glossary dark\nthe".encode("utf-8"))  # 一行分兩次寄達也要能接起來
+        os.write(w, "me light\n".encode("utf-8"))
+        os.close(w)
+    assert lines == ["show glossary dark", "theme light"]
+
+
+def test_exit_while_reading_stdin_does_not_crash():
+    """使用者先關掉說明視窗時，讀 stdin 的執行緒還卡著，程式也要正常結束（不可 Fatal Python error）。"""
+    script = ("import sys, time\n"
+              "from pllangstudio.helpviewer.window import StdinBridge\n"
+              "StdinBridge().start(sys.stdin.fileno())\n"
+              "time.sleep(0.5)\n")
+    proc = subprocess.Popen([sys.executable, "-c", script], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        err = proc.stderr.read()  # stdin 保持開著，子行程要自己結束
+        assert proc.wait(timeout=30) == 0, err.decode("utf-8", "replace")
+    finally:
+        proc.stdin.close()

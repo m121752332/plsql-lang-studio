@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
-from typing import BinaryIO, Callable
+from typing import Callable
 
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
@@ -61,14 +62,20 @@ class StdinBridge(QObject):
     """背景執行緒逐行讀 stdin，透過 signal 交回主執行緒；讀到結尾（主程式關閉）時送出 closed。
 
     用 daemon 執行緒而不是 QThread：使用者先關掉視窗時，卡在讀取的執行緒會隨程式結束，不會拖住關閉。
+    直接用 os.read 讀檔案描述元，不經過 sys.stdin：卡在 sys.stdin 讀取的 daemon 執行緒
+    會讓程式結束時出現 Fatal Python error（拿不到 BufferedReader 的鎖）。
     """
     received = Signal(str)
     closed = Signal()
 
-    def start(self, stream: BinaryIO) -> None:
-        threading.Thread(target=self._run, args=(stream,), daemon=True).start()
+    def start(self, fd: int) -> None:
+        threading.Thread(target=self._run, args=(fd,), daemon=True).start()
 
-    def _run(self, stream: BinaryIO) -> None:
-        for raw in stream:
-            self.received.emit(raw.decode("utf-8", "replace"))
+    def _run(self, fd: int) -> None:
+        pending = b""
+        while chunk := os.read(fd, 4096):
+            pending += chunk
+            *lines, pending = pending.split(b"\n")
+            for line in lines:
+                self.received.emit(line.decode("utf-8", "replace").rstrip("\r"))
         self.closed.emit()
