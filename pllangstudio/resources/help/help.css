@@ -57,6 +57,14 @@ td:first-child { white-space: nowrap; }  /* 名詞、符號、按鍵這類短欄
 ol.steps li { margin: 4px 0; }
 img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; }
 figure { margin: 12px 0; }
+figure.side { width: fit-content; max-width: 100%; }  /* 小對話框照原尺寸顯示，不要被拉寬 */
+figure img { cursor: zoom-in; }
+#zoom {
+  position: fixed; inset: 0; z-index: 10; overflow: auto; cursor: zoom-out;
+  background: rgba(0, 0, 0, 0.75); padding: 24px; text-align: center;
+}
+#zoom[hidden] { display: none; }
+#zoom img { max-width: none; cursor: zoom-out; }
 figcaption { color: var(--muted); font-size: 13px; }
 .note, .warn { padding: 8px 12px; border-left: 4px solid; border-radius: 4px; margin: 10px 0; }
 .note { background: var(--note-bg); border-color: var(--note-border); }

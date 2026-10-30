@@ -44,7 +44,7 @@
   <div class="flow">
     <span>① 選好主語系與副語系</span><b>→</b><span>② 在表格修改翻譯</span><b>→</b><span>③ <kbd>Ctrl+S</kbd> 存檔</span><b>→</b><span>④ 部署</span><b>→</b><span>⑤ 重新啟動 PL/SQL Developer</span>
   </div>
-  <p class="hint">左側可以搜尋關鍵字；在程式的任何對話框按 <kbd>F1</kbd>，會直接開到那個功能的說明。</p>
+  <p class="hint">左側可以搜尋關鍵字；在程式的任何對話框按 <kbd>F1</kbd>，會直接開到那個功能的說明；點截圖可以放大。</p>
 </header>
 
 <section id="overview">
@@ -97,6 +97,7 @@
 
 <section id="screen">
   <h2>畫面介紹</h2>
+  <figure><img src="img/main-window.png" alt="主視窗"><figcaption>主視窗：上方是選單列與工具列，左側檔案清單，右側是比對表格，下方是詳細區，最下面是狀態列</figcaption></figure>
   <table>
     <tr><th>名稱</th><th>用途</th></tr>
     <tr><td><strong>選單列</strong></td><td><strong>檔案</strong>（存檔、部署、切換工作區）、<strong>編輯</strong>（復原、尋找、批次工具）、<strong>配置</strong>（外觀、紀錄事件、事件檢視器）、<strong>關於</strong>（使用說明）</td></tr>
@@ -109,6 +110,7 @@
     <tr><td><strong>狀態列</strong></td><td>還有幾個字串沒存檔、有幾個錯誤或警告、目前在第幾列、是否已部署</td></tr>
   </table>
   <h3>在檔案清單上按右鍵</h3>
+  <figure class="side"><img src="img/file-panel.png" alt="檔案清單"><figcaption>檔案清單：上方是工作區，下方是 PL/SQL Developer 的語言檔</figcaption></figure>
   <table>
     <tr><th>選項</th><th>作用</th></tr>
     <tr><td>設為主語系</td><td>把這個語言檔當成參考</td></tr>
@@ -137,6 +139,7 @@
   <h3>多行的字串怎麼改？</h3>
   <p>有些說明文字有好幾行，表格格子沒辦法直接改（欄位會顯示「標題（多行）」）。這時點選那一列，在下方<strong>詳細區</strong>的編輯框裡修改（可以按 <kbd>Enter</kbd> 換行），再按「<strong>套用</strong>」；想放棄就按「<strong>還原</strong>」。</p>
   <h3>詳細區會告訴你什麼？</h3>
+  <figure><img src="img/detail.png" alt="詳細區"><figcaption>詳細區：上面是元件路徑、說明與差異標色，下面的編輯框可以修改多行字串</figcaption></figure>
   <ul>
     <li><strong>元件路徑</strong>：這段文字在哪個視窗、哪個元件上。</li>
     <li><strong>說明</strong>：PL/SQL Developer 寫給翻譯者看的提示，幫助你理解原意。</li>
@@ -205,11 +208,13 @@ Button
     <li>✅ <strong>整批一次復原</strong>：套用後後悔了，按一次 <kbd>Ctrl+Z</kbd> 就能全部還原。</li>
     <li>✅ <strong>只改副語系的翻譯</strong>，英文、識別碼和格式都不會被動到。</li>
   </ul>
+  <figure><img src="img/preview.png" alt="批次預覽"><figcaption>預覽：每一列都列出修改前、修改後，取消勾選的列不會被修改；「全選」「全不選」可以一次切換</figcaption></figure>
 </section>
 
 <section id="replace">
   <h2>尋找取代</h2>
-  <p><strong>編輯 ▸ 尋找取代…</strong>（<kbd>Ctrl+H</kbd>）：在副語系裡把某個詞全部換掉，例如把「宏」全部換成「巨集」。按「確定」後會先<a href="#batch">預覽</a>。</p>
+  <p><strong>編輯 ▸ 尋找取代…</strong>（<kbd>Ctrl+H</kbd>）：在副語系裡把某個詞全部換掉，例如把「宏」全部換成「巨集」。按「預覽」後會先列出所有會被修改的字串，見<a href="#batch">批次工具與預覽</a>。</p>
+  <figure class="side"><img src="img/replace.png" alt="尋找取代"><figcaption>尋找取代</figcaption></figure>
   <ul>
     <li><strong>規則運算式</strong>：進階用法，例如尋找 <code>%(\d)</code>、取代成 <code>{\1}</code>。不懂的話不用勾。寫錯時會顯示錯誤訊息，不會套用。</li>
     <li><strong>區分大小寫</strong>：勾選後，<code>Table</code> 和 <code>table</code> 會被當成不同的字。</li>
@@ -236,6 +241,7 @@ Button
     <tr><td>文本</td><td>文字</td><td>常規</td><td>一般</td></tr>
     <tr><td>列表</td><td>清單</td><td>模板</td><td>範本</td></tr>
   </table>
+  <figure><img src="img/glossary.png" alt="用語對照表"><figcaption>用語對照表：規則由上往下套用，下方是殘留簡體字的例外詞</figcaption></figure>
   <p>在用語對照表視窗裡可以：</p>
   <ul>
     <li><strong>新增／刪除</strong>規則，<strong>勾選或取消</strong>「啟用」。</li>
@@ -295,6 +301,7 @@ Button
 <section id="theme-font">
   <h2>主題與字型</h2>
   <p>在 <strong>配置 ▸ 配置… ▸ 外觀</strong> 設定，選擇會被記住，下次打開時沿用。</p>
+  <figure class="side"><img src="img/settings.png" alt="配置：外觀"><figcaption>配置 ▸ 外觀</figcaption></figure>
   <h3>主題</h3>
   <table>
     <tr><th>選項</th><th>效果</th></tr>
@@ -324,7 +331,9 @@ Button
     <li><strong>匯出篩選結果…</strong>：把目前列出的紀錄壓成 zip（含程式與系統版本），附在回報裡。</li>
     <li>如果上次程式被強制關閉或當機，下次開啟時會多一筆警告「上次程式未正常結束」。</li>
   </ul>
+  <figure><img src="img/event-viewer.png" alt="事件檢視器"><figcaption>事件檢視器：上方篩選，中間是事件清單，下方是選取事件的完整內容</figcaption></figure>
   <h3>保留與維護（配置 ▸ 配置… ▸ 紀錄事件）</h3>
+  <figure class="side"><img src="img/settings-log.png" alt="配置：紀錄事件"><figcaption>配置 ▸ 紀錄事件</figcaption></figure>
   <ul>
     <li><strong>保留天數</strong>：預設資訊 90 天、警告 90 天、錯誤 30 天，超過會自動清除。</li>
     <li><strong>目前紀錄</strong>：資訊／警告／錯誤各幾筆、最舊一筆的日期、檔案大小。</li>

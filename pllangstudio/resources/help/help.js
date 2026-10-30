@@ -81,6 +81,20 @@
     const links = {};
     document.querySelectorAll("#toc a[href^='#']").forEach(function (a) { links[a.hash.slice(1)] = a; });
 
+    // 點截圖以原尺寸顯示，再點一下或按 Esc 關閉
+    const zoom = document.createElement("div");
+    zoom.id = "zoom";
+    zoom.hidden = true;
+    zoom.addEventListener("click", function () { zoom.hidden = true; });
+    document.body.append(zoom);
+    main.querySelectorAll("figure img").forEach(function (img) {
+      img.addEventListener("click", function () {
+        zoom.replaceChildren(img.cloneNode());
+        zoom.hidden = false;
+      });
+    });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") zoom.hidden = true; });
+
     const search = document.getElementById("search");
     search.addEventListener("input", function () { filter(main, links, search.value.trim().toLowerCase()); });
 
