@@ -1,7 +1,8 @@
-from pathlib import Path
+from html.parser import HTMLParser
 
 import pytest
 
+from pllangstudio import resources
 from pllangstudio.core import helpdoc
 from pllangstudio.core.helpdoc import Command
 
@@ -57,3 +58,46 @@ def test_find_help_program(tmp_path):
     exe.parent.mkdir()
     exe.write_bytes(b"MZ")
     assert helpdoc.find_help_program(tmp_path) == exe
+
+
+INDEX = resources.path("help/index.html")
+
+
+class _Collect(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.ids, self.srcs, self.links = set(), [], []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if "id" in a:
+            self.ids.add(a["id"])
+        if tag in ("img", "script") and a.get("src"):
+            self.srcs.append(a["src"])
+        if tag == "link" and a.get("href"):
+            self.links.append(a["href"])
+        if tag == "a" and (a.get("href") or "").startswith("#"):
+            self.links.append(a["href"])
+
+
+def _parse() -> _Collect:
+    p = _Collect()
+    p.feed(INDEX.read_text(encoding="utf-8"))
+    return p
+
+
+def test_every_topic_has_a_section():
+    assert set(helpdoc.TOPICS) <= _parse().ids
+
+
+def test_local_files_exist_and_nothing_remote():
+    p = _parse()
+    for ref in p.srcs + [h for h in p.links if not h.startswith("#")]:
+        assert "://" not in ref, ref  # 不連外、不用 CDN
+        assert (INDEX.parent / ref).is_file(), ref
+
+
+def test_in_page_links_point_to_existing_ids():
+    p = _parse()
+    for href in (h for h in p.links if h.startswith("#")):
+        assert href[1:] in p.ids, href

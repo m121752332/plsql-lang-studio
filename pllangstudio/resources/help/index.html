@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLLangStudio 使用說明</title>
+<link rel="stylesheet" href="help.css">
+<script src="help.js"></script>
+</head>
+<body>
+<nav id="toc">
+  <div class="brand">PLLangStudio 使用說明</div>
+  <input id="search" type="search" placeholder="搜尋說明…" autocomplete="off">
+  <p id="no-result" hidden>找不到符合的內容。</p>
+  <div class="group">入門</div>
+  <a href="#overview">這個工具在做什麼</a>
+  <a href="#terms">先認識幾個名詞</a>
+  <a href="#quick-start">第一次使用</a>
+  <a href="#screen">畫面介紹</a>
+  <div class="group">修改翻譯</div>
+  <a href="#edit">修改一個翻譯</a>
+  <a href="#markers">表格符號、錯誤與警告</a>
+  <a href="#notepad">用記事本修改</a>
+  <div class="group">批次工具</div>
+  <a href="#batch">批次工具與預覽</a>
+  <a href="#replace">尋找取代</a>
+  <a href="#s2twp">簡→繁</a>
+  <a href="#glossary">用語對照表</a>
+  <div class="group">存檔與部署</div>
+  <a href="#save-deploy">存檔和部署</a>
+  <a href="#safety">安全機制與備份</a>
+  <div class="group">設定與紀錄</div>
+  <a href="#theme-font">主題與字型</a>
+  <a href="#event-log">事件紀錄</a>
+  <a href="#files">檔案放在哪裡</a>
+  <div class="group">參考</div>
+  <a href="#shortcuts">快速鍵一覽</a>
+  <a href="#faq">常見問題</a>
+</nav>
+<main>
+<header class="hero">
+  <h1>PLLangStudio 使用說明</h1>
+  <p><strong>PLLangStudio 是幫 PL/SQL Developer「換說法」的工具。</strong>它可以打開 PL/SQL Developer 的語言檔，把兩種語言並排比對，讓你修改介面上的中文翻譯，改完再放回去。</p>
+  <div class="flow">
+    <span>① 選好主語系與副語系</span><b>→</b><span>② 在表格修改翻譯</span><b>→</b><span>③ <kbd>Ctrl+S</kbd> 存檔</span><b>→</b><span>④ 部署</span><b>→</b><span>⑤ 重新啟動 PL/SQL Developer</span>
+  </div>
+  <p class="hint">左側可以搜尋關鍵字；在程式的任何對話框按 <kbd>F1</kbd>，會直接開到那個功能的說明。</p>
+</header>
+
+<section id="overview">
+  <h2>這個工具在做什麼</h2>
+  <p>PL/SQL Developer 的選單、按鈕、訊息會顯示成什麼文字，都寫在 <code>Languages</code> 資料夾裡的<strong>語言檔</strong>（副檔名 <code>.lang</code>）。例如 <code>Taiwan.lang</code> 就是繁體中文版的介面文字。</p>
+  <p>問題是：</p>
+  <ul>
+    <li>🔒 <strong>語言檔被加密了</strong>：用記事本打開只會看到亂碼，沒辦法直接改。</li>
+    <li>🔍 <strong>很難比對</strong>：想知道「英文原文是什麼」、「簡體版怎麼翻」，沒有工具可以並排看。</li>
+    <li>⚠️ <strong>很容易改壞</strong>：語言檔有固定格式，少一行或多一行，整個介面翻譯就會亂掉。</li>
+  </ul>
+  <table>
+    <tr><th>它幫你做的事</th><th>就像是…</th></tr>
+    <tr><td>自動<strong>解密</strong>語言檔，讓你看得懂</td><td>把上鎖的日記本打開</td></tr>
+    <tr><td>把兩種語言<strong>並排比對</strong>，連英文原文一起顯示</td><td>考卷旁邊放著標準答案</td></tr>
+    <tr><td>只讓你改「翻譯」，格式<strong>不會被改壞</strong></td><td>只能在空格裡填答案，題目不能塗改</td></tr>
+    <tr><td>改完再<strong>加密</strong>放回去</td><td>把日記本重新鎖好放回抽屜</td></tr>
+  </table>
+</section>
+
+<section id="terms">
+  <h2>先認識幾個名詞</h2>
+  <table>
+    <tr><th>名詞</th><th>意思</th><th>舉例</th></tr>
+    <tr><td><strong>語言檔</strong></td><td>PL/SQL Developer 的介面翻譯檔，一種語言一個檔案</td><td><code>Taiwan.lang</code>、<code>Chinese.lang</code></td></tr>
+    <tr><td><strong>筆</strong></td><td>語言檔裡「一個介面元件」的翻譯資料</td><td>「取消」按鈕是一筆</td></tr>
+    <tr><td><strong>字串</strong></td><td>一筆裡面一段要翻譯的文字。一筆可以有好幾個字串，例如按鈕的「標題」和滑鼠移上去時的「提示」</td><td>標題「&amp;取消」、提示「關閉視窗」</td></tr>
+    <tr><td><strong>識別碼</strong></td><td>每一筆的「身分證字號」，由視窗名稱和元件名稱組成，靠它在不同語言檔之間找到同一筆</td><td><code>AAMacrosEditDlg.ButtonPanel.CancelBtn.Button</code></td></tr>
+    <tr><td><strong>英文原文</strong></td><td>每一筆都附有英文，所有語言檔的英文都一樣，是翻譯的來源</td><td><code>&amp;Cancel</code></td></tr>
+    <tr><td><strong>主語系</strong></td><td>拿來<strong>參考</strong>的語言檔，只能看不能改（🔒 唯讀），預設是簡體中文 <code>Chinese.lang</code></td><td>像「參考答案」</td></tr>
+    <tr><td><strong>副語系</strong></td><td>你要<strong>修改</strong>的語言檔，預設是繁體中文 <code>Taiwan.lang</code></td><td>像「你的作業」</td></tr>
+    <tr><td><strong>工作區</strong></td><td>放你修改中檔案的資料夾。所有修改都先在這裡進行，不會直接動到 PL/SQL Developer</td><td>像「草稿本」</td></tr>
+    <tr><td><strong>部署</strong></td><td>把工作區改好的語言檔放回 PL/SQL Developer 讓它生效</td><td>像「把作業交出去」</td></tr>
+    <tr><td><strong>用語對照表</strong></td><td>一份「哪個詞要換成哪個詞」的清單，可以重複使用</td><td>「配置」→「設定」</td></tr>
+    <tr><td><strong>例外詞</strong></td><td>用語對照表裡刻意「不要換」的詞</td><td>「新建→新增」但「重新建立」不要變成「重新增立」</td></tr>
+  </table>
+</section>
+
+<section id="quick-start">
+  <h2>第一次使用</h2>
+  <p>雙擊 <strong><code>PLLangStudio.exe</code></strong> 就能使用，不需要安裝。第一次打開時，程式會自動：</p>
+  <ol class="steps">
+    <li>在 exe 旁邊建立 <strong><code>workspace</code></strong>（工作區）資料夾。如果那裡無法寫入（例如 exe 放在 <code>C:\Program Files</code>），會改建在 <code>文件\PLLangStudio\workspace</code>。</li>
+    <li>找到 PL/SQL Developer 的語言資料夾，預設是 <code>C:\Program Files\PLSQL Developer 17\Languages</code>。找不到時請用 <strong>檔案 ▸ PL/SQL 語言目錄…</strong> 自己選。</li>
+    <li>把 <code>Chinese.lang</code>（簡體）和 <code>Taiwan.lang</code>（繁體）<strong>複製一份</strong>到工作區。</li>
+    <li>打開比對畫面：主語系＝簡體，副語系＝繁體。</li>
+  </ol>
+  <div class="note">💡 <strong>放心</strong>：程式複製的是「副本」，PL/SQL Developer 裡的原檔完全不會被動到，直到你按「部署」為止。</div>
+</section>
+
+<section id="screen">
+  <h2>畫面介紹</h2>
+  <table>
+    <tr><th>名稱</th><th>用途</th></tr>
+    <tr><td><strong>選單列</strong></td><td><strong>檔案</strong>（存檔、部署、切換工作區）、<strong>編輯</strong>（復原、尋找、批次工具）、<strong>配置</strong>（外觀、紀錄事件、事件檢視器）、<strong>關於</strong>（使用說明）</td></tr>
+    <tr><td><strong>工具列</strong></td><td>最常用的按鈕：切換工作區、💾 加密存檔、🚀 部署、📝 記事本、復原、重做、批次工具</td></tr>
+    <tr><td><strong>檔案清單</strong>（左側）</td><td>上方是「工作區」裡的語言檔，標著哪個是主語系（🔒 唯讀）、哪個是副語系；下方是 PL/SQL Developer 裡所有的語言檔。中間的分隔線可以上下拖曳</td></tr>
+    <tr><td><strong>主語系／副語系選擇</strong></td><td>用下拉選單換成任何一種語言。兩邊不能是同一個檔案，另一邊已選的檔案會變成灰色</td></tr>
+    <tr><td><strong>篩選和搜尋</strong></td><td>只看某一種狀態的列，或用關鍵字搜尋</td></tr>
+    <tr><td><strong>對照表格</strong></td><td>一列就是一個字串，主語系和副語系永遠在同一列，捲動時不會錯位</td></tr>
+    <tr><td><strong>詳細區</strong>（下方）</td><td>顯示選到那一列的完整資訊，並可以編輯多行文字</td></tr>
+    <tr><td><strong>狀態列</strong></td><td>還有幾個字串沒存檔、有幾個錯誤或警告、目前在第幾列、是否已部署</td></tr>
+  </table>
+  <h3>在檔案清單上按右鍵</h3>
+  <table>
+    <tr><th>選項</th><th>作用</th></tr>
+    <tr><td>設為主語系</td><td>把這個語言檔當成參考</td></tr>
+    <tr><td>設為副語系</td><td>把這個語言檔當成要修改的對象</td></tr>
+    <tr><td>匯入工作區</td><td>（下方清單）把 PL/SQL Developer 的語言檔複製到工作區，直接<strong>雙擊</strong>也可以</td></tr>
+    <tr><td>用記事本開 .txt</td><td>（上方清單）用記事本打開解密後的文字檔</td></tr>
+    <tr><td>從工作區移除…</td><td>（上方清單）把用不到的語言檔從工作區拿掉。會先備份到 <code>backup\</code>，<strong>PL/SQL Developer 裡的檔案不受影響</strong>。目前的主語系、副語系不能移除</td></tr>
+    <tr><td>開啟所在資料夾</td><td>在檔案總管裡找到這個檔案</td></tr>
+  </table>
+  <div class="note">💡 在上方「工作區」清單<strong>雙擊</strong>檔案，就會把它設為副語系。</div>
+</section>
+
+<section id="edit">
+  <h2>修改一個翻譯</h2>
+  <p>假設你想把「取消」按鈕的文字改成「放棄」：</p>
+  <ol class="steps">
+    <li><strong>找到那一列</strong>：在搜尋框輸入 <code>取消</code>，搜尋範圍選「副語系」。</li>
+    <li><strong>開始編輯</strong>：在那一列的「副語系」格子上<strong>雙擊</strong>，或選好那一列後按 <kbd>F2</kbd>。</li>
+    <li><strong>輸入新文字</strong>：輸入 <code>&amp;放棄</code>，按 <kbd>Enter</kbd>，游標會自動跳到下一列，方便連續修改。</li>
+    <li><strong>確認修改</strong>：那一列的狀態會出現藍色的 <strong>✎</strong>，代表「已修改、還沒存檔」。</li>
+    <li><strong>改錯了？</strong> 按 <kbd>Ctrl+Z</kbd> 復原，<kbd>Ctrl+Y</kbd> 重做。</li>
+    <li><strong>存檔</strong>：按 <kbd>Ctrl+S</kbd>。這時只存進工作區，PL/SQL Developer 還看不到。</li>
+    <li><strong>部署</strong>：<strong>檔案 ▸ 部署到 PL/SQL Developer…</strong>，見<a href="#save-deploy">存檔和部署</a>。</li>
+  </ol>
+  <div class="warn">⚠️ <code>&amp;</code> 不要刪掉！它是<strong>快速鍵記號</strong>：<code>&amp;</code> 後面的字在選單或按鈕上會加底線，按住 <kbd>Alt</kbd> 再按那個鍵就能觸發。中文翻譯常把快速鍵寫在括號裡，例如 <code>&amp;Save As</code> 翻成 <code>另存為(&amp;A)</code>。英文有 <code>&amp;</code>、翻譯卻沒有時，程式會顯示「警告」。</div>
+  <h3>多行的字串怎麼改？</h3>
+  <p>有些說明文字有好幾行，表格格子沒辦法直接改（欄位會顯示「標題（多行）」）。這時點選那一列，在下方<strong>詳細區</strong>的編輯框裡修改（可以按 <kbd>Enter</kbd> 換行），再按「<strong>套用</strong>」；想放棄就按「<strong>還原</strong>」。</p>
+  <h3>詳細區會告訴你什麼？</h3>
+  <ul>
+    <li><strong>元件路徑</strong>：這段文字在哪個視窗、哪個元件上。</li>
+    <li><strong>說明</strong>：PL/SQL Developer 寫給翻譯者看的提示，幫助你理解原意。</li>
+    <li><strong>差異標色</strong>：把主語系和副語系一個字一個字比對：
+      <span class="chip removed">紅底</span> 主語系有、副語系不一樣的字；
+      <span class="chip added">綠底</span> 副語系改過或多出來的字；
+      <span class="chip simplified">深紅底白字</span> <strong>殘留的簡體字</strong>，應該改成繁體。</li>
+  </ul>
+</section>
+
+<section id="markers">
+  <h2>表格符號、錯誤與警告</h2>
+  <p>「狀態」欄會出現這些符號，副語系的格子也會塗上對應的底色。把滑鼠移到狀態格子上會顯示詳細原因。</p>
+  <table>
+    <tr><th>符號</th><th>名稱</th><th>意思</th><th>要不要處理？</th></tr>
+    <tr><td><code>≠</code></td><td>不同</td><td>主語系和副語系的文字不一樣</td><td>通常正常（簡體和繁體本來就不同）</td></tr>
+    <tr><td><code>✎</code></td><td>已修改</td><td>你改過，<strong>還沒存檔</strong></td><td>記得按 <kbd>Ctrl+S</kbd></td></tr>
+    <tr><td><code>簡</code></td><td>殘留簡體</td><td>副語系裡還有簡體字，例如「后」應該是「後」</td><td>✅ 建議修正</td></tr>
+    <tr><td><code>⚠</code></td><td>疑似漏翻</td><td>副語系跟英文一模一樣，可能忘了翻譯</td><td>看情況，專有名詞可以不翻</td></tr>
+    <tr><td><code>◐</code></td><td>單邊</td><td>只有其中一邊有這一筆，常見於比對不同版本的語言檔</td><td>通常不用處理</td></tr>
+    <tr><td><code>✖</code></td><td>錯誤</td><td>這個修改會讓程式出問題，<strong>有錯誤時不能存檔</strong></td><td>❗ 一定要修正</td></tr>
+    <tr><td><code>!</code></td><td>警告</td><td>可能有小問題，但可以存檔</td><td>看情況</td></tr>
+  </table>
+  <h3>什麼情況會是「錯誤」？</h3>
+  <p><strong>佔位符不見了或多出來</strong>：英文裡的 <code>%1</code>、<code>%2</code>… 是程式之後要填入數字或名字的位置。例如 <code>%1 records deleted</code> 會顯示成「5 records deleted」。如果翻譯寫成「條記錄已刪除」（少了 <code>%1</code>），程式就不知道數字要放哪裡，所以<strong>不能存檔</strong>。</p>
+  <h3>什麼情況會是「警告」？</h3>
+  <ul>
+    <li>英文有快速鍵 <code>&amp;</code>，翻譯卻沒有</li>
+    <li>翻譯跟英文完全一樣（疑似漏翻）</li>
+    <li>有殘留的簡體字</li>
+    <li>開頭或結尾的空白跟英文不一樣</li>
+  </ul>
+  <h3>篩選與搜尋</h3>
+  <p>表格上方的按鈕（<code>全部</code>、<code>不同</code>、<code>殘留簡體</code>…）會顯示每種狀態有幾列，按一下就<strong>只顯示那一種</strong>。搜尋框旁的下拉選單可選範圍：<strong>全部／英文／主語系／副語系／識別碼</strong>。用 <kbd>F3</kbd>／<kbd>Shift+F3</kbd> 跳到下一個／上一個「不同」的列。</p>
+</section>
+
+<section id="notepad">
+  <h2>用記事本修改</h2>
+  <ol class="steps">
+    <li>選 <strong>檔案 ▸ 用記事本開啟副語系</strong>，程式會打開工作區裡解密好的 <code>.txt</code> 檔。</li>
+    <li>在記事本裡修改翻譯，然後存檔。</li>
+    <li>回到 PLLangStudio，<strong>大約 1 秒內就會自動載入</strong>，改過的地方會標成 ✎。</li>
+    <li>記得在 PLLangStudio 按 <kbd>Ctrl+S</kbd> 存檔。</li>
+  </ol>
+  <h3>記事本修改的規則</h3>
+  <p><code>.txt</code> 裡每一筆長這樣，<strong>只能改最後的翻譯行</strong>：</p>
+<pre>||010101010001000001000000000000     ← 旗標（不要動）
+AAMacrosEditDlg                      ← 視窗名稱（不要動）
+ButtonPanel                          ← 元件路徑（不要動）
+CancelBtn
+Button
+&amp;Cancel                              ← 英文原文（不要動）
+&amp;取消                                 ← ✏️ 只能改這種翻譯行</pre>
+  <div class="warn">⚠️ <strong>不要新增或刪除行</strong>，也不要改檔頭（最上面 <code>:</code> 開頭的幾行）。存檔請用 <strong>UTF-8</strong> 編碼（Windows 11 記事本預設就是）。</div>
+  <h3>表格和記事本都有修改時</h3>
+  <p>程式會問你要用哪一邊：<strong>是</strong>＝改用記事本的內容（表格的修改會被捨棄）；<strong>否</strong>＝保留表格的修改（記事本的修改會被覆蓋）。</p>
+  <h3>記事本的檔案壞掉了？</h3>
+  <p>例如存成亂碼、刪掉了整筆資料或改了檔頭，程式<strong>不會載入</strong>它，而是先把那個 <code>.txt</code> 備份到 <code>workspace\backup\</code>，改用工作區語言檔原本的內容，並告訴你哪裡有問題、備份放在哪裡。</p>
+</section>
+
+<section id="batch">
+  <h2>批次工具與預覽</h2>
+  <p>一個一個改太慢？「<strong>編輯</strong>」選單裡有三種批次工具：<a href="#replace">尋找取代</a>、<a href="#s2twp">簡→繁</a>、<a href="#glossary">用語對照表</a>。它們都有同樣的保護：</p>
+  <ul>
+    <li>✅ <strong>先預覽，再套用</strong>：會先列出「哪些字串會被改、改之前、改之後」，每一列都可以取消勾選，確定後按「套用」才會真的修改。</li>
+    <li>✅ <strong>整批一次復原</strong>：套用後後悔了，按一次 <kbd>Ctrl+Z</kbd> 就能全部還原。</li>
+    <li>✅ <strong>只改副語系的翻譯</strong>，英文、識別碼和格式都不會被動到。</li>
+  </ul>
+</section>
+
+<section id="replace">
+  <h2>尋找取代</h2>
+  <p><strong>編輯 ▸ 尋找取代…</strong>（<kbd>Ctrl+H</kbd>）：在副語系裡把某個詞全部換掉，例如把「宏」全部換成「巨集」。按「確定」後會先<a href="#batch">預覽</a>。</p>
+  <ul>
+    <li><strong>規則運算式</strong>：進階用法，例如尋找 <code>%(\d)</code>、取代成 <code>{\1}</code>。不懂的話不用勾。寫錯時會顯示錯誤訊息，不會套用。</li>
+    <li><strong>區分大小寫</strong>：勾選後，<code>Table</code> 和 <code>table</code> 會被當成不同的字。</li>
+  </ul>
+</section>
+
+<section id="s2twp">
+  <h2>簡→繁</h2>
+  <p><strong>編輯 ▸ 簡→繁（主語系 → 副語系）</strong>：把主語系的簡體中文用 OpenCC 轉換成<strong>台灣繁體和台灣用語</strong>（例如「文件→檔案」、「数据库→資料庫」），再填進副語系。</p>
+  <ul>
+    <li>只想轉換幾列：先用滑鼠選好多列（按住 <kbd>Ctrl</kbd> 或 <kbd>Shift</kbd> 點選），再執行。</li>
+    <li>沒有選取或只選一列時，會轉換全部。</li>
+  </ul>
+</section>
+
+<section id="glossary">
+  <h2>用語對照表</h2>
+  <p><strong>編輯 ▸ 用語對照表…</strong>：把常用的替換規則存起來重複使用。程式內建了一批整理好的台灣用語規則，例如：</p>
+  <table>
+    <tr><th>原本</th><th>改成</th><th>原本</th><th>改成</th></tr>
+    <tr><td>宏</td><td>巨集</td><td>會話</td><td>工作階段</td></tr>
+    <tr><td>配置</td><td>設定</td><td>事務</td><td>交易</td></tr>
+    <tr><td>訪問</td><td>存取</td><td>首選項</td><td>偏好設定</td></tr>
+    <tr><td>文本</td><td>文字</td><td>常規</td><td>一般</td></tr>
+    <tr><td>列表</td><td>清單</td><td>模板</td><td>範本</td></tr>
+  </table>
+  <p>在用語對照表視窗裡可以：</p>
+  <ul>
+    <li><strong>新增／刪除</strong>規則，<strong>勾選或取消</strong>「啟用」。</li>
+    <li>設定<strong>例外詞</strong>：用逗號 <code>,</code> 分隔多個詞。例如「通過→透過」的例外是「通過計數」，因為那是測試的 Pass count，不能改成「透過」。</li>
+    <li><strong>上移／下移</strong>：規則<strong>由上往下</strong>依序套用，<strong>較長的詞要放上面</strong>。例如「配置文件→設定檔」要排在「配置→設定」前面，不然「配置文件」會先被改成「設定文件」。</li>
+    <li><strong>殘留簡體字的例外詞</strong>：有些字在繁體也是對的（例如「游標」的游、「批准」的准），放在這裡就不會被誤判成簡體字。</li>
+    <li>按「<strong>儲存並套用到副語系…</strong>」，會<a href="#batch">預覽</a>並套用全部規則。</li>
+  </ul>
+</section>
+
+<section id="save-deploy">
+  <h2>存檔和部署</h2>
+  <p>修改要經過「<strong>存檔</strong>」和「<strong>部署</strong>」兩個步驟，才會出現在 PL/SQL Developer 裡。</p>
+  <div class="flow">
+    <span>表格修改</span><b>→ 存檔 <kbd>Ctrl+S</kbd> →</b><span>工作區的語言檔<br><small>草稿本，隨時可以改</small></span><b>→ 部署 →</b><span>PL/SQL Developer 的語言檔<br><small>重新啟動後生效</small></span>
+  </div>
+  <h3>💾 加密存檔（Ctrl+S）</h3>
+  <ul>
+    <li>只會存進<strong>工作區</strong>，不會影響 PL/SQL Developer。</li>
+    <li>存檔前會自動檢查：有「<strong>錯誤</strong>」→ 不能存檔，會列出問題並跳到那一列；有「<strong>警告</strong>」→ 會問你要不要繼續存檔。</li>
+    <li>存檔前會先把舊檔<strong>備份</strong>到 <code>workspace\backup\</code>。</li>
+  </ul>
+  <h3>🚀 部署到 PL/SQL Developer</h3>
+  <ol class="steps">
+    <li>選 <strong>檔案 ▸ 部署到 PL/SQL Developer…</strong>。還有沒存檔的修改時，會先問你要不要存檔。</li>
+    <li>程式會告訴你這次跟 PL/SQL Developer 裡的版本<strong>有幾筆不同</strong>，請你確認。</li>
+    <li>PL/SQL Developer 裝在 <code>C:\Program Files</code>，Windows 會跳出 <strong>UAC 視窗</strong>，請按「<strong>是</strong>」。按「否」也沒關係，修改還在工作區，下次再部署就好。</li>
+    <li>程式會先備份 PL/SQL Developer 裡的舊檔，寫入後再<strong>讀回來逐一比對</strong>，確定一個位元組都沒寫錯。</li>
+    <li><strong>重新啟動 PL/SQL Developer</strong>，就能看到新的翻譯了。</li>
+  </ol>
+  <div class="note">💡 檔案清單上方的「已部署」欄會顯示 ✓ 或「未部署」，狀態列也會提醒你有沒有尚未部署的修改。</div>
+</section>
+
+<section id="safety">
+  <h2>安全機制與備份</h2>
+  <table>
+    <tr><th>保護</th><th>說明</th></tr>
+    <tr><td>🛡️ <strong>原檔不會被直接修改</strong></td><td>所有修改都在工作區進行，按「部署」才會寫回 PL/SQL Developer</td></tr>
+    <tr><td>💾 <strong>每次都會備份</strong></td><td>存檔、部署、匯入覆蓋之前，都會把舊檔複製到 <code>workspace\backup\</code>，檔名加上日期時間</td></tr>
+    <tr><td>✍️ <strong>不會寫到一半</strong></td><td>先寫到暫存檔，完成後才一次換成正式檔名。就算中途停電，檔案不是舊的就是新的</td></tr>
+    <tr><td>🔍 <strong>部署後會驗證</strong></td><td>寫進 PL/SQL Developer 後，會讀回來逐位元組比對</td></tr>
+    <tr><td>🧱 <strong>格式受保護</strong></td><td>只能改翻譯，旗標、英文、識別碼都改不到；記事本的 <code>.txt</code> 格式不對也不會被接受</td></tr>
+    <tr><td>❗ <strong>錯誤會擋下來</strong></td><td>佔位符 <code>%1</code> 不見之類會讓程式出問題的修改，無法存檔</td></tr>
+    <tr><td>🔔 <strong>離開前會提醒</strong></td><td>還有沒存檔的修改時，關閉程式或切換主語系、副語系前都會先問你</td></tr>
+    <tr><td>🩹 <strong>設定檔壞了也能開</strong></td><td>設定檔損毀時，會改名成 <code>.corrupt</code> 保留下來，再用預設值開啟</td></tr>
+  </table>
+  <h3>怎麼從備份救回來？</h3>
+  <ol class="steps">
+    <li><strong>先關閉 PLLangStudio</strong>。</li>
+    <li>打開 <code>workspace\backup\</code> 資料夾，找到想要的版本。檔名格式是 <code>名稱_年月日_時分秒_微秒.lang</code>，例如 <code>Taiwan_20261026_193557_123456.lang</code>；開頭是 <code>installed_</code> 的，是<strong>部署前</strong>從 PL/SQL Developer 備份出來的檔案。</li>
+    <li>把它複製到 <code>workspace\lang\</code>，改名成原本的名稱（例如 <code>Taiwan.lang</code>），取代舊檔。</li>
+    <li><strong>刪掉 <code>workspace\txt\</code> 裡同名的 <code>.txt</code></strong>（例如 <code>Taiwan.txt</code>）。不刪的話，程式會以為舊的 <code>.txt</code> 是你用記事本做的修改，又把它載入回來。</li>
+    <li>重新打開 PLLangStudio。</li>
+  </ol>
+</section>
+
+<section id="theme-font">
+  <h2>主題與字型</h2>
+  <p>在 <strong>配置 ▸ 配置… ▸ 外觀</strong> 設定，選擇會被記住，下次打開時沿用。</p>
+  <h3>主題</h3>
+  <table>
+    <tr><th>選項</th><th>效果</th></tr>
+    <tr><td><strong>亮色</strong></td><td>白底黑字</td></tr>
+    <tr><td><strong>暗色</strong></td><td>深色底淺色字（GitHub Dark 配色），晚上用比較不刺眼</td></tr>
+    <tr><td><strong>跟隨系統</strong>（預設）</td><td>跟著 Windows 的「設定 ▸ 個人化 ▸ 色彩」自動切換</td></tr>
+  </table>
+  <p>這份使用說明也會跟著程式的主題切換亮色或暗色。</p>
+  <h3>字型與字體大小</h3>
+  <p>字型和大小會套用到<strong>整個介面</strong>，表格的列高也會跟著調整。</p>
+  <table>
+    <tr><th>操作</th><th>作用</th></tr>
+    <tr><td><strong>配置 ▸ 配置… ▸ 外觀</strong></td><td>選字型和大小（7～32 pt），下方有預覽，按「確定」或「套用」才生效；「還原預設字型」回到 Windows 的系統字型</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd></td><td>放大字體</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>-</kbd></td><td>縮小字體</td></tr>
+    <tr><td><kbd>Ctrl+0</kbd></td><td>還原預設字型與大小</td></tr>
+  </table>
+  <p>同一個視窗的「紀錄事件」頁請見<a href="#event-log">事件紀錄</a>。</p>
+</section>
+
+<section id="event-log">
+  <h2>事件紀錄</h2>
+  <p>程式會自動記錄你做過的操作（開啟、匯入、存檔、部署……）與所有錯誤，<strong>不會記錄翻譯內容</strong>。</p>
+  <ul>
+    <li><strong>錯誤對話框</strong>最後會顯示「事件編號 #1234」，回報問題時請提供這個編號。對話框上有 <strong>複製事件編號</strong> 和 <strong>開啟事件檢視器</strong> 兩個按鈕。</li>
+    <li><strong>配置 ▸ 事件檢視器…</strong>：依等級（資訊／警告／錯誤）、期間、關鍵字篩選；輸入 <code>#1234</code> 可直接找到該事件。選取一筆可在下方看到完整內容與錯誤堆疊。</li>
+    <li><strong>匯出篩選結果…</strong>：把目前列出的紀錄壓成 zip（含程式與系統版本），附在回報裡。</li>
+    <li>如果上次程式被強制關閉或當機，下次開啟時會多一筆警告「上次程式未正常結束」。</li>
+  </ul>
+  <h3>保留與維護（配置 ▸ 配置… ▸ 紀錄事件）</h3>
+  <ul>
+    <li><strong>保留天數</strong>：預設資訊 90 天、警告 90 天、錯誤 30 天，超過會自動清除。</li>
+    <li><strong>目前紀錄</strong>：資訊／警告／錯誤各幾筆、最舊一筆的日期、檔案大小。</li>
+    <li><strong>刪除 N 天前的紀錄</strong>：不分等級刪除，事件編號不會重設。</li>
+    <li><strong>立即清除過期紀錄</strong>：依保留天數立刻清一次。</li>
+    <li><strong>開啟紀錄資料夾</strong>：開啟 <code>events.db</code> 與備份所在的資料夾。</li>
+    <li><strong>初始化事件紀錄…</strong>：清空全部紀錄，事件編號從 #1 重新開始。刪除前會自動備份，備份失敗就不會刪除。</li>
+  </ul>
+</section>
+
+<section id="files">
+  <h2>檔案放在哪裡</h2>
+<pre>PLLangStudio.exe
+PLLangHelp\               ← 說明程式（顯示這份使用說明，請不要刪除）
+workspace\                ← 工作區（你的所有修改都在這裡）
+├─ lang\                  ← 匯入的語言檔（加密），存檔就是寫到這裡
+├─ txt\                   ← 解密後的文字檔，給記事本用
+├─ backup\                ← 所有備份，檔名有日期時間
+├─ glossary.json          ← 用語對照表
+└─ settings.json          ← PL/SQL 語言目錄、上次的主語系與副語系</pre>
+  <table>
+    <tr><th>檔案</th><th>位置</th><th>內容</th></tr>
+    <tr><td>程式設定</td><td><code>%APPDATA%\PLLangStudio\app.json</code></td><td>上次使用的工作區、主題、字型與大小、事件紀錄保留天數</td></tr>
+    <tr><td>事件紀錄</td><td><code>%APPDATA%\PLLangStudio\events.db</code></td><td>操作與錯誤的紀錄，在事件檢視器查看</td></tr>
+    <tr><td>事件紀錄備份</td><td><code>%APPDATA%\PLLangStudio\backup\</code></td><td>初始化事件紀錄前自動產生的 zip</td></tr>
+    <tr><td>PL/SQL Developer 語言檔</td><td><code>C:\Program Files\PLSQL Developer 17\Languages\</code></td><td>部署的目的地</td></tr>
+  </table>
+  <p>想換到別的工作區（例如放到隨身碟），用 <strong>檔案 ▸ 切換工作區…</strong>。</p>
+</section>
+
+<section id="shortcuts">
+  <h2>快速鍵一覽</h2>
+  <table>
+    <tr><th>按鍵</th><th>功能</th></tr>
+    <tr><td><strong>雙擊</strong> 或 <kbd>F2</kbd></td><td>編輯副語系的格子</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>存入格子的修改，並跳到下一列</td></tr>
+    <tr><td><strong>右鍵</strong></td><td>複製這一格，或複製整列所有欄位（Tab 分隔）</td></tr>
+    <tr><td><kbd>Ctrl+C</kbd></td><td>複製目前格子的完整內容（多行字串也會完整複製）</td></tr>
+    <tr><td><kbd>Ctrl+S</kbd></td><td>加密存檔（存進工作區）</td></tr>
+    <tr><td><kbd>Ctrl+Z</kbd>／<kbd>Ctrl+Y</kbd></td><td>復原／重做</td></tr>
+    <tr><td><kbd>Ctrl+F</kbd></td><td>跳到搜尋框</td></tr>
+    <tr><td><kbd>Ctrl+H</kbd></td><td>尋找取代</td></tr>
+    <tr><td><kbd>F3</kbd>／<kbd>Shift+F3</kbd></td><td>跳到下一個／上一個「不同」</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd>／<kbd>Ctrl</kbd>+<kbd>-</kbd></td><td>放大／縮小字體</td></tr>
+    <tr><td><kbd>Ctrl+0</kbd></td><td>還原預設字型與大小</td></tr>
+    <tr><td><kbd>F1</kbd></td><td>使用說明（在對話框裡按會開到該功能的說明）</td></tr>
+    <tr><td><kbd>Alt+F4</kbd></td><td>結束程式</td></tr>
+  </table>
+</section>
+
+<section id="faq">
+  <h2>常見問題</h2>
+  <details open><summary>我改了翻譯，PL/SQL Developer 怎麼還是舊的？</summary>
+    <p>要做完三件事：① 按 <kbd>Ctrl+S</kbd> 存檔 → ② <strong>檔案 ▸ 部署到 PL/SQL Developer</strong> → ③ <strong>重新啟動 PL/SQL Developer</strong>。</p></details>
+  <details><summary>為什麼主語系的格子不能改？</summary>
+    <p>主語系是「參考答案」，設計成唯讀（🔒），避免不小心改到比對的基準。想改某個語言檔，就把它設為副語系。</p></details>
+  <details><summary>有些列的格子雙擊沒反應？</summary>
+    <p>那是多行的字串，「欄位」欄會寫「（多行）」。請在下方詳細區編輯，再按「套用」。</p></details>
+  <details><summary>按 Ctrl+S 說「有錯誤，不能存檔」？</summary>
+    <p>通常是佔位符 <code>%1</code>、<code>%2</code> 不見了。按「錯誤」篩選按鈕找出那幾列，把佔位符補回去。</p></details>
+  <details><summary>「疑似漏翻」很多，都要翻嗎？</summary>
+    <p>不一定。像 <code>Tablespace</code>、<code>Foreign key</code> 這類資料庫專有名詞，有些人習慣保留英文。</p></details>
+  <details><summary>「游標」被標成簡體字？</summary>
+    <p>不會。程式內建「游標」和「批准」為例外詞。發現其他被誤判的詞，可以在<a href="#glossary">用語對照表</a>下方的「殘留簡體字的例外詞」加進去。</p></details>
+  <details><summary>部署時 UAC 視窗按了「否」怎麼辦？</summary>
+    <p>沒關係，修改還在工作區，再部署一次並按「是」就好。</p></details>
+  <details><summary>可以比對其他語言嗎？</summary>
+    <p>可以。主語系、副語系都能換成任何語言檔，例如主語系選日文、副語系選繁體。下方清單裡的語言檔雙擊就能匯入工作區。</p></details>
+  <details><summary>舊版的語言檔有些列標著 ◐？</summary>
+    <p>那個檔案是比較舊的版本，有些筆只存在其中一邊，程式會標成「單邊」讓你知道，這是正常的。</p></details>
+  <details><summary>換新版的 exe 時要注意什麼？</summary>
+    <p>換掉 <code>PLLangStudio.exe</code> 與 <code>PLLangHelp\</code> 資料夾就好，<strong>不要刪掉旁邊的 <code>workspace</code> 資料夾</strong>，裡面是你所有的修改和備份。</p></details>
+</section>
+</main>
+</body>
+</html>

@@ -1,0 +1,68 @@
+/* 使用說明網頁：亮色與暗色（與主程式相同的 GitHub Dark）兩組配色，以 html[data-theme] 切換 */
+:root, html[data-theme="light"] {
+  --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --nav-bg: #f6f8fa; --border: #d1d9e0;
+  --accent: #0969da; --accent-fg: #ffffff; --code-bg: #eff2f5; --mark: #fff8c5;
+  --note-bg: #ddf4ff; --note-border: #54aeff; --warn-bg: #fff8c5; --warn-border: #d4a72c;
+  --removed: #ffd7d7; --added: #d7f5d7; --simplified: #ff8080;
+}
+html[data-theme="dark"] {
+  --bg: #24292e; --fg: #e1e4e8; --muted: #959da5; --nav-bg: #1f2428; --border: #444d56;
+  --accent: #79b8ff; --accent-fg: #1f2428; --code-bg: #2f363d; --mark: #5b5432;
+  --note-bg: #234162; --note-border: #79b8ff; --warn-bg: #5b5432; --warn-border: #ffea7f;
+  --removed: #6c3039; --added: #265b37; --simplified: #d73a49;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 16px; }
+body {
+  margin: 0; display: flex; background: var(--bg); color: var(--fg);
+  font: 15px/1.7 "Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", sans-serif;
+}
+#toc {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; flex: 0 0 240px;
+  padding: 16px 12px; background: var(--nav-bg); border-right: 1px solid var(--border);
+}
+#toc .brand { font-weight: bold; margin-bottom: 10px; }
+#toc .group { margin: 14px 0 4px; font-size: 12px; color: var(--muted); }
+#toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--fg); text-decoration: none; }
+#toc a:hover { background: var(--code-bg); }
+#toc a.active { background: var(--accent); color: var(--accent-fg); }
+#toc a.hidden { display: none; }
+#search {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--fg); font: inherit;
+}
+#no-result { color: var(--muted); }
+main { flex: 1; min-width: 0; max-width: 1000px; padding: 8px 40px 50vh; }
+.hero { padding: 8px 0 16px; border-bottom: 1px solid var(--border); }
+.hero h1 { margin: 16px 0 8px; }
+.hint { color: var(--muted); }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
+.flow span { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--nav-bg); }
+.flow b { color: var(--accent); font-weight: normal; }
+.flow small { color: var(--muted); }
+section { padding: 4px 0 16px; border-bottom: 1px solid var(--border); }
+section.hidden { display: none; }
+h2 { margin-top: 24px; }
+h3 { margin-bottom: 4px; }
+a { color: var(--accent); }
+kbd, code { background: var(--code-bg); border-radius: 4px; padding: 1px 5px; font-family: Consolas, "Microsoft JhengHei", monospace; font-size: 0.92em; }
+kbd { border: 1px solid var(--border); border-bottom-width: 2px; }
+pre { background: var(--code-bg); padding: 10px 14px; border-radius: 6px; overflow-x: auto; font-family: Consolas, "Microsoft JhengHei", monospace; line-height: 1.5; }
+table { border-collapse: collapse; margin: 8px 0; }
+th, td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; vertical-align: top; }
+th { background: var(--nav-bg); }
+ol.steps li { margin: 4px 0; }
+img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; }
+figure { margin: 12px 0; }
+figcaption { color: var(--muted); font-size: 13px; }
+.note, .warn { padding: 8px 12px; border-left: 4px solid; border-radius: 4px; margin: 10px 0; }
+.note { background: var(--note-bg); border-color: var(--note-border); }
+.warn { background: var(--warn-bg); border-color: var(--warn-border); }
+.chip { padding: 0 6px; border-radius: 4px; }
+.chip.removed { background: var(--removed); }
+.chip.added { background: var(--added); }
+.chip.simplified { background: var(--simplified); color: #ffffff; }
+details { border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; margin: 8px 0; }
+summary { cursor: pointer; font-weight: bold; }
+details p { margin: 6px 0 2px; }
+mark { background: var(--mark); color: inherit; }
