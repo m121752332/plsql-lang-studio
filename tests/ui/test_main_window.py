@@ -3,7 +3,7 @@ import shutil
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtGui import QAction, QCloseEvent, QShortcut
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from langdata import LANG_DIR, needs_lang_dir
@@ -11,6 +11,7 @@ from pllangstudio import eventlog
 from pllangstudio.core import langfile
 from pllangstudio.core.compare import Status
 from pllangstudio.core.langfile import Field
+from pllangstudio.ui import main_window as mw_module
 from pllangstudio.ui.compare_model import COL_KEY, COL_MASTER, COL_SLAVE, COL_SOURCE
 from pllangstudio.ui.main_window import MainWindow
 
@@ -482,3 +483,71 @@ def test_show_events_locates_event_id(win, events_db):
     assert [e.id for e in win.event_viewer.events] == [eid]
     win.show_events()  # 沒指定編號時保留目前的搜尋條件，只重新整理
     assert win.event_viewer.search.text() == f"#{eid}"
+
+
+class FakeHelp:
+    def __init__(self):
+        self.shown, self.closed = [], False
+
+    def show(self, topic=None):
+        self.shown.append(topic)
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def help_win(qtbot, env):
+    root, _ = env
+    fake = FakeHelp()
+    w = MainWindow(root, elevate_fn=lambda s, d: False, info=lambda *a, **k: None,
+                   ask=lambda *a, **k: QMessageBox.Yes, toast=lambda *a, **k: None, help_launcher=fake)
+    qtbot.addWidget(w)
+    w.fake_help = fake
+    return w
+
+
+def f1_shortcut(widget):
+    return next(s for s in widget.findChildren(QShortcut) if s.key().toString() == "F1")
+
+
+def press_f1_in_exec(monkeypatch, cls):
+    """把對話框的 exec 換成「按 F1 後取消」，用來確認對話框掛了哪個章節。"""
+    def fake_exec(self):
+        f1_shortcut(self).activated.emit()
+        return 0
+    monkeypatch.setattr(cls, "exec", fake_exec)
+
+
+def test_f1_in_main_window_opens_help_top(help_win):
+    help_win.act["help"].trigger()
+    assert help_win.fake_help.shown == [None]
+
+
+@pytest.mark.parametrize("cls_name, action, topic", [
+    ("ReplaceDialog", "replace", "replace"),
+    ("GlossaryDialog", "glossary", "glossary"),
+    ("SettingsDialog", "settings", "theme-font"),
+])
+def test_f1_in_dialog_opens_its_topic(help_win, monkeypatch, cls_name, action, topic):
+    press_f1_in_exec(monkeypatch, getattr(mw_module, cls_name))
+    help_win.act[action].trigger()
+    assert help_win.fake_help.shown == [topic]
+
+
+def test_f1_in_preview_opens_batch(help_win, monkeypatch):
+    press_f1_in_exec(monkeypatch, mw_module.PreviewDialog)
+    row = help_win.model.rows[0]
+    help_win._apply_changes("測試", [mw_module.batch.Change(row, "舊", "新")])
+    assert help_win.fake_help.shown == ["batch"]
+
+
+def test_f1_in_event_viewer_opens_event_log(help_win, events_db):
+    help_win.show_events()
+    f1_shortcut(help_win.event_viewer).activated.emit()
+    assert help_win.fake_help.shown == ["event-log"]
+
+
+def test_closing_main_window_closes_help(help_win):
+    help_win.close()
+    assert help_win.fake_help.closed

@@ -4,6 +4,11 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # 畫面測試時不顯示視窗
 
+from PySide6.QtCore import QCoreApplication, Qt  # noqa: E402
+
+# Qt WebEngine 要求在建立 QApplication 前設定（說明程式的測試會用到）
+QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+
 from langdata import LANG_DIR  # noqa: E402
 
 

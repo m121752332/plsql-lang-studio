@@ -27,6 +27,7 @@ from .event_viewer import EventViewer
 from .file_panel import FilePanel
 from .fonts import FontManager
 from .glossary_dialog import APPLY, GlossaryDialog
+from .help_launcher import HelpLauncher, install_help
 from .settings_dialog import SettingsDialog
 from .theme import ThemeManager
 from .toast import ToastHost
@@ -83,10 +84,12 @@ class CompareTable(QTableView):
 
 class MainWindow(QMainWindow):
     def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None, toast=None,
-                 theme_manager: ThemeManager | None = None, font_manager: FontManager | None = None):
+                 theme_manager: ThemeManager | None = None, font_manager: FontManager | None = None,
+                 help_launcher=None):
         super().__init__()
         self.theme = theme_manager or ThemeManager(QApplication.instance(), parent=self)
         self.fonts = font_manager or FontManager(QApplication.instance(), parent=self)
+        self.help = help_launcher or HelpLauncher(self.theme, parent=self)
         self.elevate_fn = elevate_fn
         self.ask = ask or self._ask  # 測試時可以換掉對話框
         self.info = info or self._info
@@ -272,18 +275,12 @@ class MainWindow(QMainWindow):
         about_menu.addAction(self.act["about"])
 
     def show_help(self) -> None:
-        self.info("使用說明", (
-            "1. 主語系（唯讀）是比對的基準，副語系是要修改的語言檔；可以用上方下拉選單或左側清單切換。\n"
-            "2. 在表格的副語系欄雙擊或按 F2 修改；多行字串在下方詳細區修改後按「套用」。\n"
-            "3. 批次修改：編輯 ▸ 尋找取代、簡→繁、用語對照表，套用前都會先預覽。\n"
-            "4. Ctrl+S 加密存檔（只寫工作區），確認無誤後 檔案 ▸ 部署到 PL/SQL Developer，重新啟動 PL/SQL Developer 生效。\n"
-            "5. 也可以用記事本修改副語系的 .txt，存檔後會自動載入；只能改翻譯，不能新增或刪除筆。\n\n"
-            "表格中按右鍵可複製單一儲存格或整列（Tab 分隔）；Ctrl+C 複製目前的儲存格。\n\n"
-            "快速鍵：Ctrl+S 存檔、Ctrl+Z／Ctrl+Y 復原重做、Ctrl+F 尋找、Ctrl+H 尋找取代、F3／Shift+F3 下一個／上一個不同。"))
+        self.help.show(None)
 
     def open_settings(self) -> None:
         with self._working():
             dlg = SettingsDialog(self.theme, self.fonts, self.show_events, self)
+            install_help(dlg, "theme-font", self.help.show)
             dlg.exec()
             dlg.deleteLater()  # 父物件是主視窗，不主動釋放會一直累積
 
@@ -291,6 +288,7 @@ class MainWindow(QMainWindow):
         """事件檢視器只開一個，再按一次就帶到前面並重新整理；指定事件編號時直接列出那一筆。"""
         if self.event_viewer is None:
             self.event_viewer = EventViewer(self.theme, self)
+            install_help(self.event_viewer, "event-log", self.help.show)
         if event_id is not None:
             self.event_viewer.search.setText(f"#{event_id}")
         self.event_viewer.refresh()
@@ -651,6 +649,7 @@ class MainWindow(QMainWindow):
             return
         with self._working():
             dlg = PreviewDialog(title, changes, self)
+            install_help(dlg, "batch", self.help.show)
             if dlg.exec():
                 edits = [(self.model.row_of_ref(c.row.ref), c.after) for c in dlg.checked()]
                 applied = [e for e in edits if e[0] is not None]
@@ -660,6 +659,7 @@ class MainWindow(QMainWindow):
     def find_replace(self) -> None:
         with self._working():
             dlg = ReplaceDialog(self)
+            install_help(dlg, "replace", self.help.show)
             if dlg.exec() and dlg.find.text():
                 try:
                     changes = batch.preview_replace(self.model.rows, self.model.master, self.model.slave,
@@ -678,6 +678,7 @@ class MainWindow(QMainWindow):
     def edit_glossary(self) -> None:
         with self._working():
             dlg = GlossaryDialog(self.ws.load_glossary(), self)
+            install_help(dlg, "glossary", self.help.show)
             result = dlg.exec()
             if result in (1, APPLY):
                 g = dlg.glossary()
@@ -692,6 +693,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self.confirm_discard():
+            self.help.close()
             event.accept()
         else:
             event.ignore()

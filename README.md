@@ -2,6 +2,8 @@
 
 > 一句話說明：**PLLangStudio 是幫 PL/SQL Developer「換說法」的工具。**
 > 它可以打開 PL/SQL Developer 的語言檔，把兩種語言並排比對，讓你修改介面上的中文翻譯，改完再放回去。
+>
+> 📖 程式裡按 **F1** 可以看圖文版的使用說明，在對話框裡按 F1 會直接開到那個功能的說明。
 
 ---
 
@@ -458,7 +460,7 @@ A：可以。主語系、副語系都能換成任何語言檔，例如主語系�
 A：那個檔案是比較舊的版本，有些筆只存在其中一邊，程式會標成「單邊」讓你知道。這是正常的。
 
 **Q：換新版的 exe 時要注意什麼？**
-A：只要換掉 `PLLangStudio.exe` 就好，**不要刪掉旁邊的 `workspace` 資料夾**，裡面是你所有的修改和備份。
+A：換掉 `PLLangStudio.exe` 和 `PLLangHelp\` 資料夾就好，**不要刪掉旁邊的 `workspace` 資料夾**，裡面是你所有的修改和備份。
 
 ---
 
@@ -466,6 +468,7 @@ A：只要換掉 `PLLangStudio.exe` 就好，**不要刪掉旁邊的 `workspace`
 
 ```
 PLLangStudio.exe
+PLLangHelp\               ← 說明程式（按 F1 顯示使用說明，不要刪除；刪了會改用瀏覽器開）
 workspace\                ← 工作區（你的所有修改都在這裡）
 ├─ lang\                  ← 匯入的語言檔（加密），存檔就是寫到這裡
 ├─ txt\                   ← 解密後的文字檔，給記事本用
@@ -586,8 +589,9 @@ uv run build
 
 完成後：
 
-- 成品在 **`dist\PLLangStudio.exe`**，約 52 MB，大約需要一分鐘。
-- 打包過程的暫存檔和 `PLLangStudio.spec` 都在 `build\`，可以刪掉，下次打包會重新產生。
+- 成品在 **`dist\PLLangStudio.exe`**，約 54 MB。
+- 接著會再打包**說明程式** **`dist\PLLangHelp\`**（資料夾形式，約 414 MB，內含 Chromium）。主程式另外加上 `--exclude-module` 排除 Qt WebEngine，所以不會變大；說明程式打包完會自動刪掉用不到的檔案（除錯用檔案、其他語言的翻譯等）。兩支加起來大約需要兩分鐘。
+- 打包過程的暫存檔和 `.spec` 都在 `build\`，可以刪掉，下次打包會重新產生。
 
 ### 產生發行用 zip
 
@@ -595,7 +599,7 @@ uv run build
 uv run package
 ```
 
-先做一次上面的 `uv run build`，再把 `PLLangStudio.exe`、`README.md`、`LICENSE` 壓成 **`bin\PLLangStudio-v版本號-win64.zip`**。版本號取自 `pyproject.toml`，所以發行新版前記得先改版本號；同版本的舊 zip 會被覆蓋。
+先做一次上面的 `uv run build`，再把 `PLLangStudio.exe`、`PLLangHelp\` 資料夾、`README.md`、`LICENSE` 壓成 **`bin\PLLangStudio-v版本號-win64.zip`**（約 226 MB）。版本號取自 `pyproject.toml`，所以發行新版前記得先改版本號；同版本的舊 zip 會被覆蓋。
 
 > ⚠️ 打包前請先**關閉正在執行的 PLLangStudio.exe**，否則舊的 exe 被占用，沒辦法覆蓋。
 
@@ -643,12 +647,15 @@ $env:APPDATA = "$PWD\dev-appdata"; uv run python -m pllangstudio
 | 畫面 | PySide6（Qt 6） |
 | 簡轉繁 | OpenCC（`s2twp`：台灣用字＋台灣用語） |
 | 測試 | pytest＋pytest-qt，直接用 PL/SQL Developer 的真實語言檔測試（唯讀） |
-| 打包 | PyInstaller，打成單一 exe（約 52 MB） |
+| 打包 | PyInstaller，主程式打成單一 exe（約 54 MB）；說明程式 `PLLangHelp\` 是資料夾形式 |
+| 使用說明 | 本機靜態網頁，由說明程式用 Qt WebEngine 顯示（見 ADR-0019） |
 
 ```
 pllangstudio/
 ├─ core/      核心邏輯，不依賴畫面（加解密、解析、比對、檢查、用語表、工作區）
-└─ ui/        PySide6 畫面（主視窗、表格、詳細區、檔案清單、對話框、主題、字型）
+├─ ui/        PySide6 畫面（主視窗、表格、詳細區、檔案清單、對話框、主題、字型）
+├─ helpviewer/ 說明程式（獨立行程，顯示使用說明網頁）
+└─ resources/ 圖示與使用說明網頁（help/）
 tests/
 ├─ core/      核心測試
 └─ ui/        畫面測試（不會真的跳出視窗）

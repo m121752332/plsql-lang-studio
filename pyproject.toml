@@ -3,7 +3,7 @@
 # 套件名稱
 name = "pllangstudio"
 # 版本號（發行時請同步更新 git tag，例如 v0.1.0）
-version = "0.3.0"
+version = "0.4.0"
 # 專案簡述
 description = "PL/SQL Developer 語言編輯與比對器"
 # 說明文件

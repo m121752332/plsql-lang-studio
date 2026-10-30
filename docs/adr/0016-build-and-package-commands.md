@@ -10,6 +10,7 @@ status: accepted
 - `uv run package`：先 build，再把 exe、`README.md`、`LICENSE` 壓成 `bin\PLLangStudio-v版本號-win64.zip`。版本號以 `pyproject.toml` 為準。zip 先寫 `.tmp` 再 `os.replace`，不會留下壞掉的一半。
 - 邏輯放在 `pllangstudio/release.py`，用 `[project.scripts]` 註冊成指令。程式本身不 import 它，所以不會被包進 exe。參數一律用絕對路徑，避開 `--specpath` 的相對路徑問題。
 - 為了讓 `[project.scripts]` 生效，`pyproject.toml` 加上建置後端 `uv_build`，uv 會把本專案以可編輯模式裝進 `.venv`。
+- 說明程式加入後（[ADR-0019](0019-help-webpage.md)），`uv run build` 另外產生 `dist\PLLangHelp\` 資料夾，`uv run package` 的 zip 也一併帶入。主程式仍是一支 onefile exe。
 - 圖示等靜態檔案放在 `pllangstudio/resources/`，用 `resources.path("檔名")` 取得路徑；打包時用 `--add-data` 整個資料夾帶進 exe。放在套件裡面，從原始碼執行和從 exe 執行都用同一段程式找得到檔案。
 
 ## Considered Options
