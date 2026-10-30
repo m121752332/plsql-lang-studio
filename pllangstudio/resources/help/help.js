@@ -65,6 +65,14 @@
       if (link) link.classList.toggle("hidden", !hit);
       if (hit) { shown++; if (word) markText(s, word); }
     });
+    // 群組底下的章節都沒命中時，群組標題也藏起來
+    document.querySelectorAll("#toc .group").forEach(function (g) {
+      let any = false;
+      for (let el = g.nextElementSibling; el && !el.classList.contains("group"); el = el.nextElementSibling) {
+        if (el.tagName === "A" && !el.classList.contains("hidden")) any = true;
+      }
+      g.classList.toggle("hidden", !any);
+    });
     document.getElementById("no-result").hidden = shown > 0;
   }
 

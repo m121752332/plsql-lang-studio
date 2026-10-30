@@ -11,6 +11,8 @@ html[data-theme="dark"] {
   --note-bg: #234162; --note-border: #79b8ff; --warn-bg: #5b5432; --warn-border: #ffea7f;
   --removed: #6c3039; --added: #265b37; --simplified: #d73a49;
 }
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }  /* 捲軸、輸入框也跟著變暗 */
 * { box-sizing: border-box; }
 html { scroll-padding-top: 16px; }
 body {
@@ -26,7 +28,7 @@ body {
 #toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--fg); text-decoration: none; }
 #toc a:hover { background: var(--code-bg); }
 #toc a.active { background: var(--accent); color: var(--accent-fg); }
-#toc a.hidden { display: none; }
+#toc a.hidden, #toc .group.hidden { display: none; }
 #search {
   width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--bg); color: var(--fg); font: inherit;
@@ -51,6 +53,7 @@ pre { background: var(--code-bg); padding: 10px 14px; border-radius: 6px; overfl
 table { border-collapse: collapse; margin: 8px 0; }
 th, td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; vertical-align: top; }
 th { background: var(--nav-bg); }
+td:first-child { white-space: nowrap; }  /* 名詞、符號、按鍵這類短欄位不要被擠成兩行 */
 ol.steps li { margin: 4px 0; }
 img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; }
 figure { margin: 12px 0; }
