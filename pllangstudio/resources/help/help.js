@@ -3,12 +3,25 @@
   "use strict";
   const root = document.documentElement;
 
-  function setTheme(theme) {
+  // 使用者在說明視窗按過主題鈕後，再按 F1 開說明不會被蓋回主程式的主題；主程式換主題時才跟著換
+  let manual = false;
+
+  function applyTheme(theme) {
     root.dataset.theme = theme === "dark" ? "dark" : "light";
   }
 
+  function setTheme(theme) {
+    manual = false;
+    applyTheme(theme);
+  }
+
+  function toggleTheme() {
+    manual = true;
+    applyTheme(root.dataset.theme === "dark" ? "light" : "dark");
+  }
+
   function helpShow(topic, theme) {
-    setTheme(theme);
+    if (!manual) applyTheme(theme);
     const el = topic ? document.getElementById(topic) : null;
     history.replaceState(null, "", el ? "#" + topic : location.pathname + location.search);
     if (el) el.scrollIntoView(); else window.scrollTo(0, 0);
@@ -94,6 +107,8 @@
       });
     });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") zoom.hidden = true; });
+
+    document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
     const search = document.getElementById("search");
     search.addEventListener("input", function () { filter(main, links, search.value.trim().toLowerCase()); });

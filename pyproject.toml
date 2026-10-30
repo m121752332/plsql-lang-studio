@@ -17,10 +17,12 @@ dependencies = [
     "pyside6>=6.12.0",  # Qt 圖形介面
 ]
 
-# 指令捷徑：uv run build 產生 exe；uv run package 產生 exe 後再壓成 bin\ 底下的 zip
+# 指令捷徑：uv run build 產生 exe；uv run package 產生 exe 後再壓成 bin\ 底下的 zip；
+# uv run i18n 更新介面翻譯（translations\*.ts）並編成程式用的 .qm
 [project.scripts]
 build = "pllangstudio.release:build"
 package = "pllangstudio.release:package"
+i18n = "pllangstudio.release:i18n"
 
 # 要有建置後端，uv 才會把本專案裝進 .venv，上面的指令捷徑才能用
 [build-system]

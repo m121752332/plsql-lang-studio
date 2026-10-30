@@ -22,13 +22,16 @@ from typing import Callable
 from loguru import logger
 
 from . import __version__, appconfig
-from .core import langfile
+from .core import i18n, langfile
+from .core.i18n import QT_TRANSLATE_NOOP
 
 GROUP_OF_LEVEL = {"TRACE": "info", "DEBUG": "info", "INFO": "info", "SUCCESS": "info",
                   "WARNING": "warning", "ERROR": "error", "CRITICAL": "error"}
-GROUP_LABEL = {"info": "資訊", "warning": "警告", "error": "錯誤"}
+# 紀錄內容固定用繁體中文；畫面上顯示等級時才用 i18n.translate("eventlog", 名稱) 翻譯
+GROUP_LABEL = {"info": QT_TRANSLATE_NOOP("eventlog", "資訊"), "warning": QT_TRANSLATE_NOOP("eventlog", "警告"),
+               "error": QT_TRANSLATE_NOOP("eventlog", "錯誤")}
 LEVEL_LABEL = {"TRACE": "資訊", "DEBUG": "資訊", "INFO": "資訊", "SUCCESS": "資訊",
-               "WARNING": "警告", "ERROR": "錯誤", "CRITICAL": "嚴重錯誤"}
+               "WARNING": "警告", "ERROR": "錯誤", "CRITICAL": QT_TRANSLATE_NOOP("eventlog", "嚴重錯誤")}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -403,14 +406,14 @@ def export_zip(events: list[Event], dest: Path, extra: dict[str, str] | None = N
 
 def with_event_id(text: str, event_id: int | None) -> str:
     """錯誤對話框的訊息附上事件編號，回報問題時用。"""
-    return text if event_id is None else f"{text}\n\n事件編號 #{event_id}"
+    return text if event_id is None else text + "\n\n" + i18n.translate("eventlog", "事件編號 #{id}").format(id=event_id)
 
 
 def crash_message(event_id: int | None) -> str:
-    text = "發生未預期的錯誤。"
-    if event_id is not None:
-        text += f"（事件編號 #{event_id}）\n\n回報問題時請提供此編號，並從「配置 ▸ 事件檢視器」匯出紀錄。"
-    return text
+    if event_id is None:
+        return i18n.translate("eventlog", "發生未預期的錯誤。")
+    return i18n.translate("eventlog", "發生未預期的錯誤。（事件編號 #{id}）\n\n"
+                                      "回報問題時請提供此編號，並從「配置 ▸ 事件檢視器」匯出紀錄。").format(id=event_id)
 
 
 def _pid_alive(pid: int) -> bool:

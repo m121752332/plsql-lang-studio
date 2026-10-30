@@ -171,3 +171,17 @@ def test_open_folder(dialog, events_db):
     dialog.log_page.open_folder = opened.append
     dialog.log_page.folder_button.click()
     assert opened == [str(events_db.parent)]
+
+
+def test_language_choice_applies_immediately(dialog, qtbot):
+    lang = dialog.appearance.lang
+    assert lang.currentData() == "zh_TW" and lang.currentText() == "繁體中文"
+    lang.setCurrentIndex(lang.findData("ja"))
+    try:
+        dialog.apply()
+        assert dialog.language.code == "ja" and appconfig.language() == "ja"
+        qtbot.waitUntil(lambda: dialog.windowTitle() == "設定")
+        assert dialog.pages_list.item(0).text() == "外観" and lang.currentText() == "日本語"
+    finally:
+        dialog.language.set_language("zh_TW")
+    qtbot.waitUntil(lambda: dialog.windowTitle() == "配置")

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
+from . import i18n
 from .convert import is_simplified_char
+from .i18n import QT_TRANSLATE_NOOP
 
 PLACEHOLDER = re.compile(r"%\d")
 LOWER_WORD = re.compile(r"[a-z]{2,}")  # 全大寫縮寫（DML、NLS）通常不翻，不算漏翻
@@ -21,7 +23,13 @@ def _looks_technical(s: str) -> bool:
 class Issue:
     level: Literal["error", "warning"]
     code: str
-    message: str
+    text: str  # 繁體中文原文，{名稱} 是佔位
+    params: dict = field(default_factory=dict)
+
+    @property
+    def message(self) -> str:
+        """每次讀取時才翻譯：切換介面語言後，表格提示會跟著換。"""
+        return i18n.translate("validate", self.text).format(**self.params)
 
 
 def covered(text: str, words: Iterable[str]) -> set[int]:
@@ -54,16 +62,17 @@ def check(source: str, target: str, exceptions: Iterable[str] = ()) -> list[Issu
     issues: list[Issue] = []
     ps, pt = set(PLACEHOLDER.findall(source)), set(PLACEHOLDER.findall(target))
     if ps != pt:
-        issues.append(Issue("error", "PLACEHOLDER",
-                            f"佔位符不一致：英文 {' '.join(sorted(ps)) or '無'}，翻譯 {' '.join(sorted(pt)) or '無'}"))
+        none = i18n.translate("validate", "無")
+        issues.append(Issue("error", "PLACEHOLDER", QT_TRANSLATE_NOOP("validate", "佔位符不一致：英文 {source}，翻譯 {target}"),
+                            {"source": " ".join(sorted(ps)) or none, "target": " ".join(sorted(pt)) or none}))
     if _has_accel(source) and not _has_accel(target):
-        issues.append(Issue("warning", "ACCEL", "英文有快速鍵 &，翻譯沒有"))
+        issues.append(Issue("warning", "ACCEL", QT_TRANSLATE_NOOP("validate", "英文有快速鍵 &，翻譯沒有")))
     if target == source and LOWER_WORD.search(source) and not _looks_technical(source):
-        issues.append(Issue("warning", "UNTRANSLATED", "翻譯跟英文完全相同，可能漏翻"))
+        issues.append(Issue("warning", "UNTRANSLATED", QT_TRANSLATE_NOOP("validate", "翻譯跟英文完全相同，可能漏翻")))
     spans = simplified_spans(target, exceptions)
     if spans:
         chars = "".join(dict.fromkeys(target[a:b] for a, b in spans))
-        issues.append(Issue("warning", "SIMPLIFIED", f"殘留簡體字：{chars}"))
+        issues.append(Issue("warning", "SIMPLIFIED", QT_TRANSLATE_NOOP("validate", "殘留簡體字：{chars}"), {"chars": chars}))
     if target and _edges(source) != _edges(target):
-        issues.append(Issue("warning", "SPACES", "開頭或結尾的空白跟英文不一致"))
+        issues.append(Issue("warning", "SPACES", QT_TRANSLATE_NOOP("validate", "開頭或結尾的空白跟英文不一致")))
     return issues

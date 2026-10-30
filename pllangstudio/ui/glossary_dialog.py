@@ -14,16 +14,16 @@ APPLY = 2  # 自訂的 done() 結果：儲存並套用到副語系
 class GlossaryDialog(QDialog):
     def __init__(self, g: Glossary, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("用語對照表")
+        self.setWindowTitle(self.tr("用語對照表"))
         self.resize(760, 560)
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["啟用", "尋找", "取代為", "例外（以 , 分隔）"])
+        self.table.setHorizontalHeaderLabels([self.tr("啟用"), self.tr("尋找"), self.tr("取代為"), self.tr("例外（以 , 分隔）")])
         for rule in g.rules:
             self._add(rule)
         self.exceptions = QLineEdit(", ".join(g.simplified_exceptions))
 
-        add, delete = QPushButton("新增"), QPushButton("刪除")
-        up, down = QPushButton("上移"), QPushButton("下移")
+        add, delete = QPushButton(self.tr("新增")), QPushButton(self.tr("刪除"))
+        up, down = QPushButton(self.tr("上移")), QPushButton(self.tr("下移"))
         add.clicked.connect(lambda: self._add(Rule("", "")))
         delete.clicked.connect(lambda: self.table.removeRow(self.table.currentRow()))
         up.clicked.connect(lambda: self._move(-1))
@@ -37,16 +37,16 @@ class GlossaryDialog(QDialog):
         body.addLayout(side)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Save).setText("儲存")
-        apply_btn = buttons.addButton("儲存並套用到副語系…", QDialogButtonBox.ActionRole)
+        buttons.button(QDialogButtonBox.Save).setText(self.tr("儲存"))
+        apply_btn = buttons.addButton(self.tr("儲存並套用到副語系…"), QDialogButtonBox.ActionRole)
         apply_btn.clicked.connect(lambda: self.done(APPLY))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("規則依清單順序套用，較長的詞請排在前面（例如「配置文件」在「配置」前面）。"))
+        lay.addWidget(QLabel(self.tr("規則依清單順序套用，較長的詞請排在前面（例如「配置文件」在「配置」前面）。")))
         lay.addLayout(body)
-        lay.addWidget(QLabel("殘留簡體字的例外詞（以 , 分隔）："))
+        lay.addWidget(QLabel(self.tr("殘留簡體字的例外詞（以 , 分隔）：")))
         lay.addWidget(self.exceptions)
         lay.addWidget(buttons)
 

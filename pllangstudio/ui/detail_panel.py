@@ -5,10 +5,11 @@ from __future__ import annotations
 import difflib
 import html
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QCoreApplication, QEvent, Signal
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QTextBrowser,
                                QVBoxLayout, QWidget)
 
+from ..core import i18n
 from ..core.langfile import FIELD_LABEL
 from ..core.validate import simplified_spans
 from . import theme
@@ -32,7 +33,9 @@ def diff_html(master: str, slave: str, exceptions: list[str]) -> str:
             else:
                 s_out.append(ch)
     br = lambda s: "".join(s).replace("\n", "<br>")
-    return (f"<b>主語系：</b>{br(m_out)}<br><b>副語系：</b>{br(s_out)}")
+    master_label = QCoreApplication.translate("DetailPanel", "主語系：")
+    slave_label = QCoreApplication.translate("DetailPanel", "副語系：")
+    return f"<b>{master_label}</b>{br(m_out)}<br><b>{slave_label}</b>{br(s_out)}"
 
 
 class DetailPanel(QWidget):
@@ -50,8 +53,8 @@ class DetailPanel(QWidget):
         self.diff.setMaximumHeight(90)
         self.editor = QPlainTextEdit()
         self.editor.setMaximumHeight(90)
-        self.apply_btn = QPushButton("套用")
-        self.revert_btn = QPushButton("還原")
+        self.apply_btn = QPushButton()
+        self.revert_btn = QPushButton()
         self.apply_btn.clicked.connect(self._apply)
         self.revert_btn.clicked.connect(self._revert)
 
@@ -67,7 +70,20 @@ class DetailPanel(QWidget):
         for w in (self.path, self.comments, self.diff):
             lay.addWidget(w)
         lay.addLayout(edit_row)
+        self.model = None
+        self._set_texts()
         self.show_row(None, None)
+
+    def _set_texts(self) -> None:
+        self.apply_btn.setText(self.tr("套用"))
+        self.revert_btn.setText(self.tr("還原"))
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.LanguageChange:
+            self._set_texts()
+            self._show_labels()
+            self.refresh_colors()
+        super().changeEvent(event)
 
     def refresh_colors(self) -> None:
         """主題切換後重畫說明與差異標色（編輯框裡尚未套用的文字保留）。"""
@@ -82,19 +98,28 @@ class DetailPanel(QWidget):
         self.editor.setEnabled(enabled)
         self.apply_btn.setEnabled(enabled)
         self.revert_btn.setEnabled(enabled)
+        self._show_labels()
         if i is None:
-            self.path.setText("（未選取）")
-            self.comments.clear()
             self.diff.clear()
             self.editor.clear()
             return
-        r = model.rows[i]
-        lf = model.slave if r.s_index is not None else model.master
-        e = lf.entries[r.s_index if r.s_index is not None else r.m_index]
-        self.path.setText(f"<b>{' &gt; '.join(html.escape(x) for x in r.key)}</b>　欄位：{FIELD_LABEL[r.field]}")
-        self.comments.setText("說明：" + (" / ".join(c for c in e.comments if c) or "（無）"))
         self.diff.setHtml(diff_html(model.master_text(i) or "", model.slave_text(i) or "", model.exceptions))
         self.editor.setPlainText(model.slave_text(i) or "")
+
+    def _show_labels(self) -> None:
+        """元件路徑與說明註解；切換介面語言時只重設這些，編輯框裡尚未套用的文字保留。"""
+        if self.row is None:
+            self.path.setText(self.tr("（未選取）"))
+            self.comments.clear()
+            return
+        r = self.model.rows[self.row]
+        lf = self.model.slave if r.s_index is not None else self.model.master
+        e = lf.entries[r.s_index if r.s_index is not None else r.m_index]
+        key = " &gt; ".join(html.escape(x) for x in r.key)
+        field = i18n.translate("Field", FIELD_LABEL[r.field])
+        self.path.setText(self.tr("<b>{key}</b>　欄位：{field}").format(key=key, field=field))
+        comments = " / ".join(c for c in e.comments if c) or self.tr("（無）")
+        self.comments.setText(self.tr("說明：{comments}").format(comments=comments))
 
     def _apply(self) -> None:
         if self.row is not None:

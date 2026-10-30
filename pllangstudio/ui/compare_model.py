@@ -7,12 +7,15 @@ from collections import Counter
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QUndoStack
 
-from ..core import compare
+from ..core import compare, i18n
 from ..core.compare import STATUS_LABEL, Status
+from ..core.i18n import QT_TRANSLATE_NOOP
 from ..core.langfile import FIELD_LABEL, LangFile, check_line
 from . import theme
 
-COLUMNS = ["#", "狀態", "識別碼", "欄位", "英文", "主語系", "副語系"]
+COLUMNS = ["#", QT_TRANSLATE_NOOP("CompareModel", "狀態"), QT_TRANSLATE_NOOP("CompareModel", "識別碼"),
+           QT_TRANSLATE_NOOP("CompareModel", "欄位"), QT_TRANSLATE_NOOP("CompareModel", "英文"),
+           QT_TRANSLATE_NOOP("CompareModel", "主語系"), QT_TRANSLATE_NOOP("CompareModel", "副語系")]
 COL_NO, COL_STATUS, COL_KEY, COL_FIELD, COL_SOURCE, COL_MASTER, COL_SLAVE = range(7)
 STATUS_ORDER = [Status.ERROR, Status.MODIFIED, Status.SIMPLIFIED, Status.UNTRANSLATED,
                 Status.ONE_SIDED, Status.WARNING, Status.DIFFERENT]
@@ -111,17 +114,17 @@ class CompareModel(QAbstractTableModel):
         for i, new in edits:
             r = self.rows[i]
             if r.s_index is None:
-                raise ValueError(f"第 {i + 1} 列不能修改：沒有副語系的翻譯")
+                raise ValueError(self.tr("第 {row} 列不能修改：沒有副語系的翻譯").format(row=i + 1))
             try:
                 if r.item is None:
                     for line in (new.split("\n") if new else []):
                         check_line(line)
                 else:
                     if "\n" in new:
-                        raise ValueError("這一列是單行字串，不能包含換行")
+                        raise ValueError(self.tr("這一列是單行字串，不能包含換行"))
                     check_line(new)
             except ValueError as e:
-                raise ValueError(f"第 {i + 1} 列不能修改：{e}") from None
+                raise ValueError(self.tr("第 {row} 列不能修改：{error}").format(row=i + 1, error=e)) from None
         real = [(i, self.slave_text(i), new) for i, new in edits if self.slave_text(i) != new]
         if real:
             self.undo_stack.push(EditCommand(self, real, label))
@@ -162,7 +165,7 @@ class CompareModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
-            return COLUMNS[section]
+            return self.tr(COLUMNS[section])
         return None
 
     def data(self, index, role=Qt.DisplayRole):
@@ -174,17 +177,20 @@ class CompareModel(QAbstractTableModel):
             if col == COL_NO:
                 return i + 1
             if col == COL_STATUS:
-                return "".join(s.value for s in STATUS_ORDER if s in st)
+                return "".join(i18n.translate("Status", s.value) for s in STATUS_ORDER if s in st)
             if col == COL_KEY:
                 return ".".join(r.key)
             if col == COL_FIELD:
-                label = FIELD_LABEL[r.field]
-                return f"{label}（多行）" if r.item is None else (f"{label} {r.item + 1}" if r.field.name == "ITEMS" else label)
+                label = i18n.translate("Field", FIELD_LABEL[r.field])
+                if r.item is None:
+                    return self.tr("{field}（多行）").format(field=label)
+                return f"{label} {r.item + 1}" if r.field.name == "ITEMS" else label
             text = {COL_SOURCE: r.source, COL_MASTER: self.master_text(i), COL_SLAVE: self.slave_text(i)}[col]
             return text if role == Qt.EditRole else one_line(text)
         if role == Qt.ToolTipRole:
             if col == COL_STATUS:
-                lines = [STATUS_LABEL[s] for s in STATUS_ORDER if s in st] + [i_.message for i_ in self.issues[i]]
+                lines = ([i18n.translate("Status", STATUS_LABEL[s]) for s in STATUS_ORDER if s in st]
+                         + [i_.message for i_ in self.issues[i]])
                 return "\n".join(lines) or None
             if col in (COL_SOURCE, COL_MASTER, COL_SLAVE):
                 return {COL_SOURCE: r.source, COL_MASTER: self.master_text(i), COL_SLAVE: self.slave_text(i)}[col]
@@ -201,7 +207,8 @@ class CompareModel(QAbstractTableModel):
         return None
 
     def refresh_colors(self) -> None:
-        """主題切換後重畫所有列。"""
+        """主題或介面語言切換後重畫所有列與標題。"""
+        self.headerDataChanged.emit(Qt.Horizontal, 0, len(COLUMNS) - 1)
         if self.rows:
             self.dataChanged.emit(self.index(0, 0), self.index(len(self.rows) - 1, len(COLUMNS) - 1))
 
@@ -215,21 +222,25 @@ class CompareModel(QAbstractTableModel):
         if role != Qt.EditRole or not (self.flags(index) & Qt.ItemIsEditable):
             return False
         try:
-            self.request_edit([(index.row(), str(value))], "編輯字串")
+            self.request_edit([(index.row(), str(value))], self.tr("編輯字串"))
         except ValueError:
             return False
         return True
 
 
 class CompareFilter(QSortFilterProxyModel):
-    SCOPES = {"全部": (COL_KEY, COL_SOURCE, COL_MASTER, COL_SLAVE), "英文": (COL_SOURCE,),
-              "主語系": (COL_MASTER,), "副語系": (COL_SLAVE,), "識別碼": (COL_KEY,)}
+    SCOPES = {"all": (COL_KEY, COL_SOURCE, COL_MASTER, COL_SLAVE), "source": (COL_SOURCE,),
+              "master": (COL_MASTER,), "slave": (COL_SLAVE,), "key": (COL_KEY,)}
+    SCOPE_LABEL = {"all": QT_TRANSLATE_NOOP("CompareFilter", "全部"), "source": QT_TRANSLATE_NOOP("CompareFilter", "英文"),
+                   "master": QT_TRANSLATE_NOOP("CompareFilter", "主語系"),
+                   "slave": QT_TRANSLATE_NOOP("CompareFilter", "副語系"),
+                   "key": QT_TRANSLATE_NOOP("CompareFilter", "識別碼")}  # 顯示時用 self.tr() 翻譯
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.status_filter: Status | None = None
         self.text = ""
-        self.scope = "全部"
+        self.scope = "all"
 
     def set_status(self, status: Status | None) -> None:
         self.beginFilterChange()

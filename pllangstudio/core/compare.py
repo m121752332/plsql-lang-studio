@@ -7,23 +7,26 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable
 
-from . import validate
+from . import i18n, validate
+from .i18n import QT_TRANSLATE_NOOP
 from .langfile import Field, LangFile
 
 
 class Status(Enum):
     DIFFERENT = "≠"
     UNTRANSLATED = "⚠"
-    SIMPLIFIED = "簡"
+    SIMPLIFIED = QT_TRANSLATE_NOOP("Status", "簡")  # 符號也會翻譯，顯示時用 i18n.translate("Status", 值)
     ONE_SIDED = "◐"
     MODIFIED = "✎"
     ERROR = "✖"
     WARNING = "!"
 
 
-STATUS_LABEL = {
-    Status.DIFFERENT: "不同", Status.UNTRANSLATED: "疑似漏翻", Status.SIMPLIFIED: "殘留簡體",
-    Status.ONE_SIDED: "單邊", Status.MODIFIED: "已修改", Status.ERROR: "錯誤", Status.WARNING: "警告",
+STATUS_LABEL = {  # 顯示時用 i18n.translate("Status", 名稱)
+    Status.DIFFERENT: QT_TRANSLATE_NOOP("Status", "不同"), Status.UNTRANSLATED: QT_TRANSLATE_NOOP("Status", "疑似漏翻"),
+    Status.SIMPLIFIED: QT_TRANSLATE_NOOP("Status", "殘留簡體"), Status.ONE_SIDED: QT_TRANSLATE_NOOP("Status", "單邊"),
+    Status.MODIFIED: QT_TRANSLATE_NOOP("Status", "已修改"), Status.ERROR: QT_TRANSLATE_NOOP("Status", "錯誤"),
+    Status.WARNING: QT_TRANSLATE_NOOP("Status", "警告"),
 }
 
 
@@ -55,7 +58,7 @@ def set_text(lf: LangFile, index: int, field: Field, item: int | None, text: str
         lf.set_target(index, field, text.split("\n") if text else [])
         return
     if "\n" in text:
-        raise ValueError("這一列是單行字串，不能輸入換行")
+        raise ValueError(i18n.translate("compare", "這一列是單行字串，不能輸入換行"))
     lines = list(lf.entries[index].target[field])
     lines[item] = text
     lf.set_target(index, field, lines)

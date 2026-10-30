@@ -14,8 +14,10 @@ from PySide6.QtWidgets import QApplication
 
 from .. import appconfig
 from ..core.compare import Status
+from ..core.i18n import QT_TRANSLATE_NOOP
 
-MODE_LABEL = {"light": "亮色", "dark": "暗色", "system": "跟隨系統"}
+MODE_LABEL = {"light": QT_TRANSLATE_NOOP("theme", "亮色"), "dark": QT_TRANSLATE_NOOP("theme", "暗色"),
+              "system": QT_TRANSLATE_NOOP("theme", "跟隨系統")}  # 顯示時用 i18n.translate("theme", 名稱)
 
 
 @dataclass(frozen=True)

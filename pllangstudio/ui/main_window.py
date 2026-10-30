@@ -7,14 +7,14 @@ import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, Qt, QTimer
+from PySide6.QtCore import QEvent, QItemSelectionModel, Qt, QTimer
 from PySide6.QtGui import QAction, QFontMetrics, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QButtonGroup, QComboBox,
                                QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
                                QSplitter, QTableView, QToolButton, QVBoxLayout, QWidget)
 
 from .. import __version__, appconfig, elevate, eventlog
-from ..core import batch, compare, langfile
+from ..core import batch, compare, i18n, langfile
 from ..core.compare import STATUS_LABEL, Status
 from ..core.langfile import LangFormatError
 from ..core.workspace import ImportConflict, Workspace
@@ -28,12 +28,13 @@ from .file_panel import FilePanel
 from .fonts import FontManager
 from .glossary_dialog import APPLY, GlossaryDialog
 from .help_launcher import HelpLauncher, install_help
+from .language import LanguageManager
 from .settings_dialog import SettingsDialog
 from .theme import ThemeManager
 from .toast import ToastHost
 
-FILTERS = [(None, "全部"), (Status.DIFFERENT, None), (Status.SIMPLIFIED, None), (Status.UNTRANSLATED, None),
-           (Status.ONE_SIDED, None), (Status.ERROR, None), (Status.WARNING, None), (Status.MODIFIED, None)]
+FILTERS = [None, Status.DIFFERENT, Status.SIMPLIFIED, Status.UNTRANSLATED, Status.ONE_SIDED, Status.ERROR, Status.WARNING,
+           Status.MODIFIED]  # None＝全部
 
 
 class CompareTable(QTableView):
@@ -58,8 +59,8 @@ class CompareTable(QTableView):
     def cell_menu(self, index) -> QMenu:
         menu = QMenu(self)
         header = self.model().headerData(index.column(), Qt.Horizontal)
-        menu.addAction(f"複製「{header}」", lambda: self.copy_cell(index))
-        menu.addAction("複製整列", lambda: self.copy_row(index))
+        menu.addAction(self.tr("複製「{column}」").format(column=header), lambda: self.copy_cell(index))
+        menu.addAction(self.tr("複製整列"), lambda: self.copy_row(index))
         return menu
 
     def _show_menu(self, pos) -> None:
@@ -85,10 +86,11 @@ class CompareTable(QTableView):
 class MainWindow(QMainWindow):
     def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None, toast=None,
                  theme_manager: ThemeManager | None = None, font_manager: FontManager | None = None,
-                 help_launcher=None):
+                 help_launcher=None, language_manager: LanguageManager | None = None):
         super().__init__()
         self.theme = theme_manager or ThemeManager(QApplication.instance(), parent=self)
         self.fonts = font_manager or FontManager(QApplication.instance(), parent=self)
+        self.language = language_manager or LanguageManager(QApplication.instance(), parent=self)
         self.help = help_launcher or HelpLauncher(self.theme, parent=self)
         self.elevate_fn = elevate_fn
         self.ask = ask or self._ask  # 測試時可以換掉對話框
@@ -122,7 +124,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         self._build_actions()
         self._build_menus()
-        tb = self.addToolBar("主要")
+        self.toolbar = tb = self.addToolBar("")
         tb.setMovable(False)
         self.ws_label = QLabel()
         tb.addWidget(self.ws_label)
@@ -144,22 +146,22 @@ class MainWindow(QMainWindow):
             combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.master_combo.activated.connect(lambda: self.set_pair(self.master_combo.currentText(), self.slave_name))
         self.slave_combo.activated.connect(lambda: self.set_pair(self.master_name, self.slave_combo.currentText()))
+        self.master_label, self.readonly_label, self.slave_label = QLabel(), QLabel(), QLabel()
         pick = QHBoxLayout()
-        pick.addWidget(QLabel("主語系"))
+        pick.addWidget(self.master_label)
         pick.addWidget(self.master_combo)
-        pick.addWidget(QLabel("🔒 唯讀"))
+        pick.addWidget(self.readonly_label)
         pick.addSpacing(30)
-        pick.addWidget(QLabel("副語系"))
+        pick.addWidget(self.slave_label)
         pick.addWidget(self.slave_combo)
         pick.addStretch()
 
         self.filter_group = QButtonGroup(self)
         self.filter_buttons: dict = {}
         flt = QHBoxLayout()
-        for status, label in FILTERS:
+        for status in FILTERS:
             b = QToolButton()
             b.setCheckable(True)
-            b.setProperty("label", label or STATUS_LABEL[status])
             self.filter_group.addButton(b)
             b.clicked.connect(lambda _=False, s=status: self.proxy.set_status(s))
             self.filter_buttons[status] = b
@@ -167,11 +169,12 @@ class MainWindow(QMainWindow):
         self.filter_buttons[None].setChecked(True)
         flt.addSpacing(20)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("搜尋（Ctrl+F）")
         self.scope = QComboBox()
-        self.scope.addItems(list(CompareFilter.SCOPES))
+        self.scope.setSizeAdjustPolicy(QComboBox.AdjustToContents)  # 切換介面語言後文字變長也不會被截斷
+        for key in CompareFilter.SCOPES:
+            self.scope.addItem("", key)
         self.search.textChanged.connect(self._apply_search)
-        self.scope.currentTextChanged.connect(self._apply_search)
+        self.scope.currentIndexChanged.connect(self._apply_search)
         flt.addWidget(self.search, 1)
         flt.addWidget(self.scope)
 
@@ -189,7 +192,7 @@ class MainWindow(QMainWindow):
         self.table.selectionModel().currentRowChanged.connect(lambda *_: self._show_detail())
 
         self.detail = DetailPanel()
-        self.detail.applyRequested.connect(lambda i, t: self.apply_edits([(i, t)], "編輯字串"))
+        self.detail.applyRequested.connect(lambda i, t: self.apply_edits([(i, t)], self.tr("編輯字串")))
         self.undo_stack.indexChanged.connect(lambda *_: self._show_detail())
         self.model.countsChanged.connect(self._update_counts)
         self.theme.changed.connect(self.model.refresh_colors)
@@ -215,6 +218,47 @@ class MainWindow(QMainWindow):
         for w in (self.st_unsaved, self.st_issues, self.st_pos, self.st_deploy):
             self.statusBar().addWidget(w)
             self.statusBar().addWidget(QLabel("｜"))
+        self._set_texts()
+
+    def _set_texts(self) -> None:
+        """畫面上固定的文字；建立畫面時與切換介面語言時呼叫。"""
+        texts = {
+            "workspace": self.tr("切換工作區…"), "plsql_dir": self.tr("PL/SQL 語言目錄…"),
+            "save": self.tr("💾 加密存檔"), "deploy": self.tr("🚀 部署到 PL/SQL Developer…"),
+            "notepad": self.tr("📝 用記事本開啟副語系"), "open_ws": self.tr("開啟工作區資料夾"), "quit": self.tr("結束"),
+            "find": self.tr("尋找"), "next_diff": self.tr("下一個不同"), "prev_diff": self.tr("上一個不同"),
+            "replace": self.tr("🔍 尋找取代…"), "s2twp": self.tr("簡→繁（主語系 → 副語系）"),
+            "glossary": self.tr("📖 用語對照表…"), "font_bigger": self.tr("放大字體"), "font_smaller": self.tr("縮小字體"),
+            "font_reset": self.tr("還原預設字型"), "help": self.tr("使用說明"), "about": self.tr("關於 PLLangStudio"),
+            "settings": self.tr("配置…"), "events": self.tr("事件檢視器…"),
+        }
+        for key, text in texts.items():
+            self.act[key].setText(text)
+        self._update_undo_texts()
+        titles = (self.tr("檔案(&F)"), self.tr("編輯(&E)"), self.tr("配置(&S)"), self.tr("關於(&A)"))
+        for menu, title in zip(self.menus, titles):
+            menu.setTitle(title)
+        self.toolbar.setWindowTitle(self.tr("主要"))
+        self.master_label.setText(self.tr("主語系"))
+        self.readonly_label.setText(self.tr("🔒 唯讀"))
+        self.slave_label.setText(self.tr("副語系"))
+        self.search.setPlaceholderText(self.tr("搜尋（Ctrl+F）"))
+        for k, key in enumerate(CompareFilter.SCOPES):
+            self.scope.setItemText(k, i18n.translate("CompareFilter", CompareFilter.SCOPE_LABEL[key]))
+
+    def retranslate(self) -> None:
+        """切換介面語言：固定文字、表格標題與狀態列都換成新的語言。"""
+        self._set_texts()
+        self._show_workspace_label()
+        self.model.refresh_colors()
+        self._update_counts()
+        self._show_detail()
+        self.refresh_files()
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.LanguageChange:
+            self.retranslate()
+        super().changeEvent(event)
 
     def _fit_row_height(self) -> None:
         """列高跟著字型走，字放大後才不會被切掉。"""
@@ -222,55 +266,61 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self) -> None:
         """選單與工具列共用同一組動作，快速鍵只註冊一次。"""
-        def make(key, text, slot, shortcut=None):
-            a = QAction(text, self)
+        def make(key, slot, shortcut=None):  # 文字在 _set_texts() 設定
+            a = QAction(self)
             a.triggered.connect(lambda _=False: slot())
             if shortcut:
                 a.setShortcut(QKeySequence(shortcut))
             self.act[key] = a
 
         self.act: dict[str, QAction] = {}
-        make("workspace", "切換工作區…", self.choose_workspace)
-        make("plsql_dir", "PL/SQL 語言目錄…", self.choose_plsql_dir)
-        make("save", "💾 加密存檔", self.save, QKeySequence.Save)
-        make("deploy", "🚀 部署到 PL/SQL Developer…", self.deploy)
-        make("notepad", "📝 用記事本開啟副語系", self.open_notepad)
-        make("open_ws", "開啟工作區資料夾", lambda: os.startfile(self.ws.root))
-        make("quit", "結束", self.close, "Alt+F4")
-        undo = self.undo_stack.createUndoAction(self, "復原")
-        undo.setShortcut(QKeySequence.Undo)
-        redo = self.undo_stack.createRedoAction(self, "重做")
-        redo.setShortcut(QKeySequence("Ctrl+Y"))
-        self.act["undo"], self.act["redo"] = undo, redo
-        make("find", "尋找", lambda: self.search.setFocus(), QKeySequence.Find)
-        make("next_diff", "下一個不同", lambda: self.jump_different(1), "F3")
-        make("prev_diff", "上一個不同", lambda: self.jump_different(-1), "Shift+F3")
-        make("replace", "🔍 尋找取代…", self.find_replace, "Ctrl+H")
-        make("s2twp", "簡→繁（主語系 → 副語系）", self.convert_s2twp)
-        make("glossary", "📖 用語對照表…", self.edit_glossary)
-        make("font_bigger", "放大字體", lambda: self.fonts.step(1))
+        make("workspace", self.choose_workspace)
+        make("plsql_dir", self.choose_plsql_dir)
+        make("save", self.save, QKeySequence.Save)
+        make("deploy", self.deploy)
+        make("notepad", self.open_notepad)
+        make("open_ws", lambda: os.startfile(self.ws.root))
+        make("quit", self.close, "Alt+F4")
+        # 不用 QUndoStack.createUndoAction：它的前置文字建立後就不能換，切換介面語言時會留在舊語言
+        make("undo", self.undo_stack.undo, QKeySequence.Undo)
+        make("redo", self.undo_stack.redo, "Ctrl+Y")
+        for key, can_changed, text_changed in (("undo", self.undo_stack.canUndoChanged, self.undo_stack.undoTextChanged),
+                                               ("redo", self.undo_stack.canRedoChanged, self.undo_stack.redoTextChanged)):
+            self.act[key].setEnabled(False)
+            can_changed.connect(self.act[key].setEnabled)
+            text_changed.connect(self._update_undo_texts)
+        make("find", lambda: self.search.setFocus(), QKeySequence.Find)
+        make("next_diff", lambda: self.jump_different(1), "F3")
+        make("prev_diff", lambda: self.jump_different(-1), "Shift+F3")
+        make("replace", self.find_replace, "Ctrl+H")
+        make("s2twp", self.convert_s2twp)
+        make("glossary", self.edit_glossary)
+        make("font_bigger", lambda: self.fonts.step(1))
         self.act["font_bigger"].setShortcuts([QKeySequence(QKeySequence.ZoomIn), QKeySequence("Ctrl+=")])  # 不按 Shift 也能放大
-        make("font_smaller", "縮小字體", lambda: self.fonts.step(-1), QKeySequence.ZoomOut)
-        make("font_reset", "還原預設字型", self.fonts.reset, "Ctrl+0")
+        make("font_smaller", lambda: self.fonts.step(-1), QKeySequence.ZoomOut)
+        make("font_reset", self.fonts.reset, "Ctrl+0")
         for name in ("font_bigger", "font_smaller", "font_reset"):  # 不在選單上，快速鍵仍要有效
             self.addAction(self.act[name])
-        make("help", "使用說明", self.show_help, "F1")
-        make("about", "關於 PLLangStudio", self.show_about)
-        make("settings", "配置…", self.open_settings)
-        make("events", "事件檢視器…", self.show_events)
+        make("help", self.show_help, "F1")
+        make("about", self.show_about)
+        make("settings", self.open_settings)
+        make("events", self.show_events)
+
+    def _update_undo_texts(self, *_args) -> None:
+        for key, prefix, text in (("undo", self.tr("復原"), self.undo_stack.undoText()),
+                                  ("redo", self.tr("重做"), self.undo_stack.redoText())):
+            self.act[key].setText(f"{prefix} {text}" if text else prefix)
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
-        file_menu = bar.addMenu("檔案(&F)")
+        self.menus = [bar.addMenu("") for _ in range(4)]  # 檔案、編輯、配置、關於；標題在 _set_texts() 設定
+        file_menu, edit_menu, settings_menu, about_menu = self.menus
         for name in ("workspace", "plsql_dir", None, "save", "deploy", None, "notepad", "open_ws", None, "quit"):
             file_menu.addSeparator() if name is None else file_menu.addAction(self.act[name])
-        edit_menu = bar.addMenu("編輯(&E)")
         for name in ("undo", "redo", None, "find", "next_diff", "prev_diff", "replace", None, "s2twp", "glossary"):
             edit_menu.addSeparator() if name is None else edit_menu.addAction(self.act[name])
-        settings_menu = bar.addMenu("配置(&S)")
         settings_menu.addAction(self.act["settings"])
         settings_menu.addAction(self.act["events"])
-        about_menu = bar.addMenu("關於(&A)")
         about_menu.addAction(self.act["help"])
         about_menu.addAction(self.act["about"])
 
@@ -279,7 +329,7 @@ class MainWindow(QMainWindow):
 
     def open_settings(self) -> None:
         with self._working():
-            dlg = SettingsDialog(self.theme, self.fonts, self.show_events, self)
+            dlg = SettingsDialog(self.theme, self.fonts, self.show_events, self, language=self.language)
             install_help(dlg, "theme-font", self.help.show)
             dlg.exec()
             dlg.deleteLater()  # 父物件是主視窗，不主動釋放會一直累積
@@ -297,9 +347,10 @@ class MainWindow(QMainWindow):
         self.event_viewer.activateWindow()
 
     def show_about(self) -> None:
-        QMessageBox.about(self, "關於 PLLangStudio", (
-            f"<b>PLLangStudio {__version__}</b><br>PL/SQL Developer 語言編輯與比對器<br><br>"
-            f"工作區：{self.ws.root}<br>PL/SQL 語言目錄：{self.ws.settings.plsql_lang_dir or '（未設定）'}"))
+        QMessageBox.about(self, self.tr("關於 PLLangStudio"), self.tr(
+            "<b>PLLangStudio {version}</b><br>PL/SQL Developer 語言編輯與比對器<br><br>"
+            "工作區：{workspace}<br>PL/SQL 語言目錄：{plsql_dir}").format(
+            version=__version__, workspace=self.ws.root, plsql_dir=self.ws.settings.plsql_lang_dir or self.tr("（未設定）")))
 
     def _ask(self, title: str, text: str, buttons=QMessageBox.Yes | QMessageBox.No,
              default=QMessageBox.No) -> QMessageBox.StandardButton:
@@ -322,9 +373,9 @@ class MainWindow(QMainWindow):
         self.ws = Workspace(root)
         eventlog.info("工作區", f"開啟工作區：{self.ws.root}")
         appconfig.remember_workspace(self.ws.root)
-        self.ws_label.setText(f" 工作區：{self.ws.root} ")
+        self._show_workspace_label()
         if not self.ws.installed_dir.is_dir():
-            self.info("找不到 PL/SQL Developer", "找不到 PL/SQL Developer 的 Languages 目錄，請手動選擇。")
+            self.info(self.tr("找不到 PL/SQL Developer"), self.tr("找不到 PL/SQL Developer 的 Languages 目錄，請手動選擇。"))
             self.choose_plsql_dir()
         names = {i.name for i in self.ws.list_workspace()}
         s = self.ws.settings
@@ -337,20 +388,23 @@ class MainWindow(QMainWindow):
                 try:
                     self.ws.import_lang(n)
                 except (OSError, ValueError) as e:
-                    self._error("匯入", "無法匯入", f"{n}\n\n{e}", e)
+                    self._error("匯入", self.tr("無法匯入"), f"{n}\n\n{e}", e)
         self.master_name = self.slave_name = ""
         self.set_pair(self.ws.settings.master, self.ws.settings.slave, confirm=False)
+
+    def _show_workspace_label(self) -> None:
+        self.ws_label.setText(self.tr(" 工作區：{path} ").format(path=self.ws.root))
 
     def choose_workspace(self) -> None:
         with self._working():
             if not self.confirm_discard():
                 return
-            d = QFileDialog.getExistingDirectory(self, "選擇工作區資料夾", str(self.ws.root))
+            d = QFileDialog.getExistingDirectory(self, self.tr("選擇工作區資料夾"), str(self.ws.root))
             if d:
                 self.open_workspace(Path(d))
 
     def choose_plsql_dir(self) -> None:
-        d = QFileDialog.getExistingDirectory(self, "選擇 PL/SQL Developer 的 Languages 目錄",
+        d = QFileDialog.getExistingDirectory(self, self.tr("選擇 PL/SQL Developer 的 Languages 目錄"),
                                              self.ws.settings.plsql_lang_dir or "C:\\")
         if d:
             self.ws.settings.plsql_lang_dir = d
@@ -371,7 +425,7 @@ class MainWindow(QMainWindow):
             combo.blockSignals(False)
         self.files.refresh(self.ws.list_installed(), self.ws.list_workspace(), self.master_name, self.slave_name)
         deployed = next((i.deployed for i in self.ws.list_workspace() if i.name == self.slave_name), None)
-        self.st_deploy.setText("已部署" if deployed else "工作區有尚未部署的修改")
+        self.st_deploy.setText(self.tr("已部署") if deployed else self.tr("工作區有尚未部署的修改"))
 
     def import_lang(self, name: str) -> None:
         with self._working():
@@ -385,12 +439,13 @@ class MainWindow(QMainWindow):
             try:
                 self.ws.import_lang(name)
             except ImportConflict:
-                if self.ask("工作區已有同名檔", f"工作區的 {name} 跟 PL/SQL Developer 裡的不同。\n要覆蓋嗎？（舊檔會先備份）") \
+                if self.ask(self.tr("工作區已有同名檔"), self.tr(
+                        "工作區的 {name} 跟 PL/SQL Developer 裡的不同。\n要覆蓋嗎？（舊檔會先備份）").format(name=name)) \
                         != QMessageBox.Yes:
                     return
                 self.ws.import_lang(name, overwrite=True)
         except (OSError, ValueError) as e:  # LangFormatError 也是 ValueError
-            self._error("匯入", "無法匯入", f"{name}\n\n{e}", e)
+            self._error("匯入", self.tr("無法匯入"), f"{name}\n\n{e}", e)
             return
         eventlog.info("匯入", f"已匯入 {name}")
         if is_open:  # 正在看的檔案被換掉了，強制重新載入
@@ -403,20 +458,22 @@ class MainWindow(QMainWindow):
     def remove_lang(self, name: str) -> None:
         with self._working():
             if name in (self.master_name, self.slave_name):
-                self._error("移除", "無法移除", f"{name} 目前是{'主語系' if name == self.master_name else '副語系'}，"
-                            "請先切換到別的檔案再移除。")
+                text = (self.tr("{name} 目前是主語系，請先切換到別的檔案再移除。") if name == self.master_name
+                        else self.tr("{name} 目前是副語系，請先切換到別的檔案再移除。"))
+                self._error("移除", self.tr("無法移除"), text.format(name=name))
                 return
             info = next((i for i in self.ws.list_workspace() if i.name == name), None)
             if info is None:
                 return
-            warn = "" if info.deployed else "\n\n⚠ 這個檔案有尚未部署的修改，移除後只能從 backup 資料夾找回。"
-            if self.ask("從工作區移除", f"要把 {name} 從工作區移除嗎？\n"
-                        f"會先備份到 backup 資料夾，PL/SQL Developer 裡的檔案不受影響。{warn}") != QMessageBox.Yes:
+            warn = "" if info.deployed else "\n\n" + self.tr("⚠ 這個檔案有尚未部署的修改，移除後只能從 backup 資料夾找回。")
+            if self.ask(self.tr("從工作區移除"), self.tr(
+                    "要把 {name} 從工作區移除嗎？\n會先備份到 backup 資料夾，PL/SQL Developer 裡的檔案不受影響。").format(name=name)
+                    + warn) != QMessageBox.Yes:
                 return
             try:
                 self.ws.remove_lang(name)
             except OSError as e:
-                self._error("移除", "無法移除", f"{name}\n\n{e}", e)
+                self._error("移除", self.tr("無法移除"), f"{name}\n\n{e}", e)
             else:
                 eventlog.info("移除", f"已從工作區移除 {name}")
             self.refresh_files()
@@ -425,9 +482,9 @@ class MainWindow(QMainWindow):
         if (self.ws.lang_dir / name).exists():
             return True
         if not (self.ws.installed_dir / name).exists():
-            self._error("匯入", "找不到檔案", name)
+            self._error("匯入", self.tr("找不到檔案"), name)
             return False
-        if self.ask("尚未匯入", f"{name} 還沒匯入工作區，要現在匯入嗎？") != QMessageBox.Yes:
+        if self.ask(self.tr("尚未匯入"), self.tr("{name} 還沒匯入工作區，要現在匯入嗎？").format(name=name)) != QMessageBox.Yes:
             return False
         self.import_lang(name)
         return (self.ws.lang_dir / name).exists()
@@ -437,7 +494,8 @@ class MainWindow(QMainWindow):
     def confirm_discard(self) -> bool:
         if self.model.modified_count() == 0:
             return True
-        return self.ask("尚未存檔", f"有 {self.model.modified_count()} 個字串修改還沒存檔，確定要捨棄嗎？") == QMessageBox.Yes
+        return self.ask(self.tr("尚未存檔"), self.tr("有 {n} 個字串修改還沒存檔，確定要捨棄嗎？").format(
+            n=self.model.modified_count())) == QMessageBox.Yes
 
     def current_row(self) -> int | None:
         idx = self.table.currentIndex()
@@ -449,7 +507,8 @@ class MainWindow(QMainWindow):
         if (master, slave) == (self.master_name, self.slave_name):
             return
         if master == slave:
-            self.toast("warning", "不能選同一個檔案", f"主語系和副語系都是 {master}。\n主語系是比對基準（唯讀），請選另一個檔案當副語系。")
+            self.toast("warning", self.tr("不能選同一個檔案"), self.tr(
+                "主語系和副語系都是 {name}。\n主語系是比對基準（唯讀），請選另一個檔案當副語系。").format(name=master))
             self.refresh_files()
             return
         if confirm and not self.confirm_discard():
@@ -463,7 +522,7 @@ class MainWindow(QMainWindow):
         try:
             m, s = self.ws.load(master), self.ws.load(slave)
         except (LangFormatError, ValueError) as e:
-            self._error("開啟", "無法開啟", str(e), e)
+            self._error("開啟", self.tr("無法開啟"), str(e), e)
             return
         self.master_name, self.slave_name = master, slave
         self.ws.settings.master, self.ws.settings.slave = master, slave
@@ -476,13 +535,14 @@ class MainWindow(QMainWindow):
                 backup = self.ws.backup_txt(slave)
                 self.model.load(m, s, exceptions)
                 self.ws.sync_txt(slave, s)
-                self._error("記事本", ".txt 無法讀取，已改用 .lang", f"{slave} 對應的 .txt 讀取失敗：{e}\n\n"
-                            f"原本的 .txt 已備份到：\n{backup}", e)
+                self._error("記事本", self.tr(".txt 無法讀取，已改用 .lang"), self.tr(
+                    "{name} 對應的 .txt 讀取失敗：{error}\n\n原本的 .txt 已備份到：\n{backup}").format(
+                    name=slave, error=e, backup=backup), e)
             else:
                 self.model.load(m, new, exceptions, baseline=s)
                 eventlog.info("記事本", f"{slave} 的 .txt 跟 .lang 不同，已載入 .txt 的內容")
-                self.toast("info", "已載入記事本的修改", f"{slave} 對應的 .txt 跟 .lang 不同，已載入 .txt 的內容。\n"
-                           "修改標示為 ✎，尚未存檔。")
+                self.toast("info", self.tr("已載入記事本的修改"), self.tr(
+                    "{name} 對應的 .txt 跟 .lang 不同，已載入 .txt 的內容。\n修改標示為 ✎，尚未存檔。").format(name=slave))
         else:
             self.model.load(m, s, exceptions)
             self.ws.sync_txt(slave, s)
@@ -503,17 +563,20 @@ class MainWindow(QMainWindow):
     def _show_detail(self) -> None:
         self.detail.show_row(self.model, self.current_row())
         cur = self.table.currentIndex()
-        self.st_pos.setText(f"第 {cur.row() + 1 if cur.isValid() else 0} / {self.proxy.rowCount()} 列")
+        self.st_pos.setText(self.tr("第 {row} / {total} 列").format(row=cur.row() + 1 if cur.isValid() else 0,
+                                                                   total=self.proxy.rowCount()))
 
     def _update_counts(self) -> None:
         c = self.model.counts()
         for status, b in self.filter_buttons.items():
-            b.setText(f"{b.property('label')} {c['ALL'] if status is None else c[status]:,}")
-        self.st_unsaved.setText(f"✎ {self.model.modified_count()} 個字串未存檔")
-        self.st_issues.setText(f"錯誤 {c[Status.ERROR]}／警告 {c[Status.WARNING]}")
+            label = self.tr("全部") if status is None else i18n.translate("Status", STATUS_LABEL[status])
+            b.setText(f"{label} {c['ALL'] if status is None else c[status]:,}")
+        self.st_unsaved.setText(self.tr("✎ {n} 個字串未存檔").format(n=self.model.modified_count()))
+        self.st_issues.setText(self.tr("錯誤 {errors}／警告 {warnings}").format(errors=c[Status.ERROR],
+                                                                            warnings=c[Status.WARNING]))
 
     def _apply_search(self) -> None:
-        self.proxy.set_search(self.search.text(), self.scope.currentText())
+        self.proxy.set_search(self.search.text(), self.scope.currentData())
 
     def jump_different(self, step: int) -> None:
         start = self.table.currentIndex().row()
@@ -532,7 +595,7 @@ class MainWindow(QMainWindow):
             self.model.request_edit(edits, label)
             return True
         except ValueError as e:
-            self._error("編輯", "無法套用修改", str(e), e)
+            self._error("編輯", self.tr("無法套用修改"), str(e), e)
             return False
 
     # ---------- 存檔／部署 ----------
@@ -544,27 +607,27 @@ class MainWindow(QMainWindow):
     def _save(self) -> bool:
         errors = self.model.has_errors()
         if errors:
-            lines = [f"第 {i + 1} 列：{'；'.join(x.message for x in self.model.issues[i] if x.level == 'error')}"
-                     for i in errors[:10]]
-            self._error("存檔", "有錯誤，不能存檔", "\n".join(lines) + ("\n…" if len(errors) > 10 else ""))
+            lines = [self.tr("第 {row} 列：{issues}").format(
+                row=i + 1, issues="；".join(x.message for x in self.model.issues[i] if x.level == "error")) for i in errors[:10]]
+            self._error("存檔", self.tr("有錯誤，不能存檔"), "\n".join(lines) + ("\n…" if len(errors) > 10 else ""))
             self.proxy.set_status(Status.ERROR)
             self.filter_buttons[Status.ERROR].setChecked(True)
             self.select_row(errors[0])
             return False
         warnings = sum(Status.WARNING in s and Status.MODIFIED in s for s in self.model.status)
-        if warnings and self.ask("有警告", f"修改過的字串中有 {warnings} 個有警告（可在「警告」篩選查看）。\n仍要存檔嗎？") \
-                != QMessageBox.Yes:
+        if warnings and self.ask(self.tr("有警告"), self.tr(
+                "修改過的字串中有 {n} 個有警告（可在「警告」篩選查看）。\n仍要存檔嗎？").format(n=warnings)) != QMessageBox.Yes:
             return False
         count = self.model.modified_count()
         try:
             self.ws.save(self.slave_name, self.model.slave)
         except OSError as e:
-            self._error("存檔", "存檔失敗", f"{self.slave_name} 沒有存成功：{e}", e)
+            self._error("存檔", self.tr("存檔失敗"), self.tr("{name} 沒有存成功：{error}").format(name=self.slave_name, error=e), e)
             return False
         self.model.mark_saved()
         eventlog.success("存檔", f"已加密存檔到工作區：{self.slave_name}（{count} 個字串修改）")
         self.refresh_files()
-        self.toast("success", "已存檔", f"已加密存檔到工作區：{self.slave_name}")
+        self.toast("success", self.tr("已存檔"), self.tr("已加密存檔到工作區：{name}").format(name=self.slave_name))
         return True
 
     def deploy(self) -> None:
@@ -572,7 +635,8 @@ class MainWindow(QMainWindow):
             self._deploy()
 
     def _deploy(self) -> None:
-        if self.model.modified_count() and (self.ask("尚未存檔", "要先存檔再部署嗎？") != QMessageBox.Yes or not self._save()):
+        if self.model.modified_count() and (self.ask(self.tr("尚未存檔"), self.tr("要先存檔再部署嗎？")) != QMessageBox.Yes
+                                            or not self._save()):
             return
         target = self.ws.installed_dir / self.slave_name
         n, unreadable = None, False
@@ -582,23 +646,24 @@ class MainWindow(QMainWindow):
             except (OSError, ValueError):
                 unreadable = True
         if n is not None:
-            text = f"{self.slave_name} 跟 PL/SQL Developer 裡的版本有 {n} 筆不同。"
+            text = self.tr("{name} 跟 PL/SQL Developer 裡的版本有 {n} 筆不同。").format(name=self.slave_name, n=n)
         elif unreadable:
-            text = f"PL/SQL Developer 裡的 {self.slave_name} 讀不出來（可能已損壞），無法比較差異。"
+            text = self.tr("PL/SQL Developer 裡的 {name} 讀不出來（可能已損壞），無法比較差異。").format(name=self.slave_name)
         else:
-            text = f"PL/SQL Developer 裡還沒有 {self.slave_name}。"
-        if self.ask("部署到 PL/SQL Developer", f"{text}\n\n要部署到：\n{target}\n嗎？（舊檔會先備份）") != QMessageBox.Yes:
+            text = self.tr("PL/SQL Developer 裡還沒有 {name}。").format(name=self.slave_name)
+        if self.ask(self.tr("部署到 PL/SQL Developer"),
+                    text + "\n\n" + self.tr("要部署到：\n{target}\n嗎？（舊檔會先備份）").format(target=target)) != QMessageBox.Yes:
             return
         try:
             res = self.ws.deploy(self.slave_name, self.elevate_fn)
         except (OSError, ValueError) as e:
-            self._error("部署", "部署失敗", f"{self.slave_name} 沒有部署成功：{e}", e)
+            self._error("部署", self.tr("部署失敗"), self.tr("{name} 沒有部署成功：{error}").format(name=self.slave_name, error=e), e)
             return
         if res.ok:
             eventlog.success("部署", f"{self.slave_name}：{res.message}")
-            self.toast("success", "已部署", res.message)
+            self.toast("success", self.tr("已部署"), res.message)
         else:
-            self._error("部署", "部署結果", res.message)
+            self._error("部署", self.tr("部署結果"), res.message)
         self.refresh_files()
 
     # ---------- 記事本 ----------
@@ -623,14 +688,14 @@ class MainWindow(QMainWindow):
             new = self.ws.load_txt(name)
         except UnicodeDecodeError:
             self.ws.acknowledge_txt(name)
-            self._error("記事本", ".txt 編碼錯誤", "請在記事本用「另存新檔」，編碼選 UTF-8 後再存一次。")
+            self._error("記事本", self.tr(".txt 編碼錯誤"), self.tr("請在記事本用「另存新檔」，編碼選 UTF-8 後再存一次。"))
             return
         except LangFormatError as e:
             self.ws.acknowledge_txt(name)
-            self._error("記事本", ".txt 格式錯誤，沒有載入", f"{e}\n\n請修正後再存一次。", e)
+            self._error("記事本", self.tr(".txt 格式錯誤，沒有載入"), f"{e}\n\n" + self.tr("請修正後再存一次。"), e)
             return
-        if self.model.modified_count() and self.ask(
-                "兩邊都有修改", "表格和記事本都有尚未存檔的修改。\n\n是 → 改用記事本的內容（表格的修改會被捨棄）\n否 → 保留表格的修改（記事本的修改會被覆蓋）") \
+        if self.model.modified_count() and self.ask(self.tr("兩邊都有修改"), self.tr(
+                "表格和記事本都有尚未存檔的修改。\n\n是 → 改用記事本的內容（表格的修改會被捨棄）\n否 → 保留表格的修改（記事本的修改會被覆蓋）")) \
                 != QMessageBox.Yes:
             self.ws.sync_txt(name, self.model.slave)
             return
@@ -639,13 +704,13 @@ class MainWindow(QMainWindow):
         self.model.load(self.model.master, new, self.model.exceptions, baseline=self.ws.load(name))
         self.select_row(self.model.row_of_key(key) if key else 0)
         eventlog.info("記事本", f"已從記事本重新載入 {name}")
-        self.toast("info", "已從記事本重新載入", f"{name} 的修改標示為 ✎，尚未存檔。")
+        self.toast("info", self.tr("已從記事本重新載入"), self.tr("{name} 的修改標示為 ✎，尚未存檔。").format(name=name))
 
     # ---------- 批次 ----------
 
     def _apply_changes(self, title: str, changes: list[batch.Change]) -> None:
         if not changes:
-            self.toast("info", title, "沒有需要修改的字串。")
+            self.toast("info", title, self.tr("沒有需要修改的字串。"))
             return
         with self._working():
             dlg = PreviewDialog(title, changes, self)
@@ -666,14 +731,14 @@ class MainWindow(QMainWindow):
                                                     dlg.find.text(), dlg.replace.text(), dlg.regex.isChecked(),
                                                     dlg.case.isChecked())
                 except Exception as e:  # 規則運算式寫錯
-                    self._error("批次修改", "尋找取代", f"規則運算式有誤：{e}", e)
+                    self._error("批次修改", self.tr("尋找取代"), self.tr("規則運算式有誤：{error}").format(error=e), e)
                     return
-                self._apply_changes("尋找取代", changes)
+                self._apply_changes(self.tr("尋找取代"), changes)
 
     def convert_s2twp(self) -> None:
         selected = {self.proxy.mapToSource(i).row() for i in self.table.selectionModel().selectedRows()}
         rows = [self.model.rows[i] for i in sorted(selected)] if len(selected) > 1 else self.model.rows
-        self._apply_changes("簡轉繁（主語系 → 副語系）", batch.preview_s2twp(rows, self.model.master, self.model.slave))
+        self._apply_changes(self.tr("簡轉繁（主語系 → 副語系）"), batch.preview_s2twp(rows, self.model.master, self.model.slave))
 
     def edit_glossary(self) -> None:
         with self._working():
@@ -686,7 +751,7 @@ class MainWindow(QMainWindow):
                 eventlog.info("用語對照表", f"用語對照表已儲存，共 {len(g.rules)} 條規則")
                 self.model.exceptions = g.simplified_exceptions
                 if result == APPLY:
-                    self._apply_changes("套用用語表", batch.preview_rules(
+                    self._apply_changes(self.tr("套用用語表"), batch.preview_rules(
                         self.model.rows, self.model.master, self.model.slave, g.rules))
 
     # ---------- 關閉 ----------

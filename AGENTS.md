@@ -11,12 +11,13 @@ pllangstudio/
 ├─ core/   不依賴 Qt 的核心邏輯（加解密、解析、比對、工作區、用語表、檢查）
 ├─ ui/     PySide6 畫面，只負責呈現與操作
 ├─ helpviewer/  說明程式（獨立行程，Qt WebEngine 顯示使用說明網頁；主程式不可 import）
-├─ resources/  靜態檔案（圖示、help/ 使用說明網頁），用 resources.path("檔名") 取得路徑
+├─ resources/  靜態檔案（圖示、help/ 使用說明網頁、i18n/ 介面翻譯 .qm），用 resources.path("檔名") 取得路徑
 ├─ appconfig.py / eventlog.py / elevate.py / __main__.py
+translations/  介面翻譯原稿 pllangstudio_<語言>.ts（簡中、英文、日文；可用 pyside6-linguist 編輯）
 tests/
 ├─ core/   核心模組測試
 └─ ui/     pytest-qt 畫面測試
-docs/adr/  架構決策紀錄（0001～0019）
+docs/adr/  架構決策紀錄（0001～0020）
 ```
 
 ## 常用指令
@@ -31,6 +32,7 @@ docs/adr/  架構決策紀錄（0001～0019）
 | 單獨除錯某個測試 | `uv run pytest -n0 路徑::測試名` |
 | 打包成 exe | `uv run build`（產生 `dist\PLLangStudio.exe` 與說明程式 `dist\PLLangHelp\`） |
 | 產生發行 zip | `uv run package`（build 後壓成 `bin\PLLangStudio-v版本號-win64.zip`） |
+| 更新介面翻譯 | `uv run i18n`（收集新字串到 `translations\*.ts` 並編成 `.qm`；翻好後再執行一次） |
 | 加依賴 | `uv add 套件`；開發用加 `--dev` |
 
 ### 用 MCP 操作執行中的程式（除錯用）
@@ -74,6 +76,7 @@ docs/adr/  架構決策紀錄（0001～0019）
 ## 撰寫風格
 
 - 使用者介面、說明文件、註解、ADR 一律用**繁體中文（台灣用語）**。程式識別字用英文。
+- **介面文字要能翻譯**（ADR-0020）：繁體中文是原文，畫面上的字串用 `self.tr("…")`／`QCoreApplication.translate("情境", "…")` 包起來，core 用 `i18n.translate("情境", "…")`，模組層級常數用 `QT_TRANSLATE_NOOP` 標記、顯示時再翻。原文必須是字面字串，變數用 `{名稱}` 佔位再 `format()`，不要用 f-string。常駐視窗的固定文字放進 `_set_texts()`，切換語言時才會跟著換。改完執行 `uv run i18n`，把簡中、英文、日文翻好（`tests/test_translations.py` 會檢查）。事件紀錄內容與使用說明網頁維持繁體中文，不翻。
 - 沿用周圍程式碼的命名、註解密度與慣用寫法，不要順手重構無關的程式。
 - 不加沒被要求的功能、抽象層或過度的錯誤處理。
 

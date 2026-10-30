@@ -551,3 +551,26 @@ def test_f1_in_event_viewer_opens_event_log(help_win, events_db):
 def test_closing_main_window_closes_help(help_win):
     help_win.close()
     assert help_win.fake_help.closed
+
+
+def test_switch_language_retranslates_open_window(win, qtbot):
+    from pllangstudio.ui.compare_model import COL_STATUS
+    i = row_of(win, "&取消")
+    win.model.setData(win.model.index(i, COL_SLAVE), "&取消X")  # 有修改：復原與狀態列都有內容
+    try:
+        win.language.set_language("en")
+        qtbot.waitUntil(lambda: win.menus[0].title() == "&File")
+        assert [m.title() for m in win.menus] == ["&File", "&Edit", "&Settings", "&Help"]
+        assert win.filter_buttons[None].text() == "All 6,672"
+        assert win.model.headerData(COL_STATUS, Qt.Horizontal) == "Status"
+        assert win.scope.currentText() == "All" and win.scope.currentData() == "all"
+        assert win.act["undo"].text() == "Undo 編輯字串（1 個字串）"  # 已經做過的步驟保留當時的名稱
+        assert win.st_unsaved.text() == "✎ 1 unsaved strings"
+        roles = {win.files.workspace.topLevelItem(k).text(1) for k in range(win.files.workspace.topLevelItemCount())}
+        assert roles == {"🔒 Primary", "Secondary"}
+        assert win.files.workspace_title.text() == "<b>Workspace</b>"
+        assert win.model.slave_text(i) == "&取消X" and win.model.modified_count() == 1  # 切換語言不動資料
+    finally:
+        win.language.set_language("zh_TW")
+    qtbot.waitUntil(lambda: win.menus[0].title() == "檔案(&F)")
+    assert win.filter_buttons[None].text() == "全部 6,672"

@@ -101,6 +101,46 @@ def make_zip(exe: Path, out_dir: Path, ver: str, help_dir: Path | None = None) -
     return out
 
 
+TRANSLATIONS = ROOT / "translations"  # 給翻譯者編輯的 .ts（可用 Qt Linguist 開啟）
+TRANSLATION_LANGUAGES = ("zh_CN", "en", "ja")  # 程式原文是繁體中文，不需要介面翻譯
+
+
+def ts_path(code: str) -> Path:
+    return TRANSLATIONS / f"pllangstudio_{code}.ts"
+
+
+def translation_sources() -> list[Path]:
+    """要收集介面文字的程式檔。說明程式只有繁體中文（ADR-0019），本模組只在開發時用，都不收。"""
+    pkg = ROOT / "pllangstudio"
+    return sorted(p for p in pkg.rglob("*.py")
+                  if "helpviewer" not in p.relative_to(pkg).parts and p.name != "release.py")
+
+
+def qt_tool(name: str) -> str:
+    """PySide6 附的 lupdate／lrelease，跟目前的 Python 放在同一個 Scripts 資料夾。"""
+    import sys
+    return str(Path(sys.executable).parent / f"pyside6-{name}")
+
+
+def lupdate_args(ts: Path) -> list[str]:
+    # 不記行號：程式改一行就會讓整份 .ts 變動，比對時看不出真正改了哪些字串
+    return [*map(str, translation_sources()), "-no-obsolete", "-locations", "none",
+            "-source-language", "zh_TW", "-target-language", ts.stem.removeprefix("pllangstudio_"), "-ts", str(ts)]
+
+
+def i18n() -> int:
+    """更新 .ts（收集新字串、刪掉不用的），再編成程式用的 .qm。新字串要翻好再執行一次。"""
+    import subprocess
+
+    out_dir = ROOT / "pllangstudio" / "resources" / "i18n"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for code in TRANSLATION_LANGUAGES:
+        ts = ts_path(code)
+        subprocess.run([qt_tool("lupdate"), *lupdate_args(ts)], check=True)
+        subprocess.run([qt_tool("lrelease"), str(ts), "-qm", str(out_dir / f"pllangstudio_{code}.qm")], check=True)
+    return 0
+
+
 def build() -> int:
     import PyInstaller.__main__
 

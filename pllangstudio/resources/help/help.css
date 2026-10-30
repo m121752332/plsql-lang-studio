@@ -23,7 +23,13 @@ body {
   position: sticky; top: 0; height: 100vh; overflow-y: auto; flex: 0 0 240px;
   padding: 16px 12px; background: var(--nav-bg); border-right: 1px solid var(--border);
 }
-#toc .brand { font-weight: bold; margin-bottom: 10px; }
+#toc .brand { display: flex; align-items: center; justify-content: space-between; font-weight: bold; margin-bottom: 10px; }
+#theme-toggle {
+  flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--fg); font-size: 15px; line-height: 1; cursor: pointer;
+}
+#theme-toggle:hover { background: var(--code-bg); }
+html[data-theme="dark"] #theme-toggle .to-dark, html[data-theme="light"] #theme-toggle .to-light { display: none; }
 #toc .group { margin: 14px 0 4px; font-size: 12px; color: var(--muted); }
 #toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--fg); text-decoration: none; }
 #toc a:hover { background: var(--code-bg); }

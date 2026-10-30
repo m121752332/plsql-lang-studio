@@ -53,6 +53,31 @@ def test_theme_command_keeps_topic(viewer, qtbot):
     assert js(viewer, qtbot, "location.hash") == "#glossary"
 
 
+def theme_of(viewer, qtbot):
+    return js(viewer, qtbot, "document.documentElement.dataset.theme")
+
+
+def test_theme_button_toggles_only_help_page(viewer, qtbot):
+    js(viewer, qtbot, "document.getElementById('theme-toggle').click(), true")
+    assert theme_of(viewer, qtbot) == "light"
+    js(viewer, qtbot, "document.getElementById('theme-toggle').click(), true")
+    assert theme_of(viewer, qtbot) == "dark"
+
+
+def test_manual_theme_survives_show_command(viewer, qtbot):
+    """在說明視窗手動切換後，從主程式再按 F1 不會被蓋回主程式的主題。"""
+    js(viewer, qtbot, "document.getElementById('theme-toggle').click(), true")
+    viewer.apply(Command("show", "dark", "replace"))
+    qtbot.waitUntil(lambda: js(viewer, qtbot, "location.hash") == "#replace", timeout=5000)
+    assert theme_of(viewer, qtbot) == "light"
+
+
+def test_main_theme_change_overrides_manual_theme(viewer, qtbot):
+    js(viewer, qtbot, "document.getElementById('theme-toggle').click(), true")
+    viewer.apply(Command("theme", "dark"))
+    qtbot.waitUntil(lambda: theme_of(viewer, qtbot) == "dark", timeout=5000)
+
+
 def test_search_filters_sections(viewer, qtbot):
     js(viewer, qtbot, "(() => { const s = document.getElementById('search'); s.value = 'UAC';"
                       "s.dispatchEvent(new Event('input')); return true; })()")

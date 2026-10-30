@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from . import langcrypt
+from . import i18n, langcrypt
+from .i18n import QT_TRANSLATE_NOOP
 
 NFIELDS = 15
 FLAG_LEN = 2 + 2 * NFIELDS
@@ -19,7 +20,8 @@ class Field(Enum):
     ITEMS = 2
 
 
-FIELD_LABEL = {Field.CAPTION: "標題", Field.HINT: "提示", Field.ITEMS: "項目"}
+FIELD_LABEL = {Field.CAPTION: QT_TRANSLATE_NOOP("Field", "標題"), Field.HINT: QT_TRANSLATE_NOOP("Field", "提示"),
+               Field.ITEMS: QT_TRANSLATE_NOOP("Field", "項目")}  # 顯示時用 i18n.translate("Field", 名稱)
 # 旗標欄位索引（0 起算）：英文 p6～p8 → 5～7，翻譯 p9～p11 → 8～10
 SOURCE_FLAG = {Field.CAPTION: 5, Field.HINT: 6, Field.ITEMS: 7}
 TARGET_FLAG = {Field.CAPTION: 8, Field.HINT: 9, Field.ITEMS: 10}
@@ -27,7 +29,7 @@ TARGET_FLAG = {Field.CAPTION: 8, Field.HINT: 9, Field.ITEMS: 10}
 
 class LangFormatError(ValueError):
     def __init__(self, line_no: int, message: str):
-        super().__init__(f"第 {line_no} 行：{message}")
+        super().__init__(i18n.translate("langfile", "第 {line} 行：{message}").format(line=line_no, message=message))
         self.line_no = line_no
         self.message = message
 
@@ -68,9 +70,9 @@ class Entry:
 def check_line(line: str) -> None:
     """翻譯的單一行不能破壞檔案格式，不合法就拋出 ValueError。"""
     if "\r" in line or "\n" in line:
-        raise ValueError("翻譯的單一行不能包含換行字元")
+        raise ValueError(i18n.translate("langfile", "翻譯的單一行不能包含換行字元"))
     if line.startswith("||"):
-        raise ValueError("翻譯不能以 || 開頭（會被當成下一筆的旗標）")
+        raise ValueError(i18n.translate("langfile", "翻譯不能以 || 開頭（會被當成下一筆的旗標）"))
 
 
 @dataclass
@@ -91,16 +93,16 @@ class LangFile:
 
 def parse(plain: bytes) -> LangFile:
     if not plain.startswith(langcrypt.BOM):
-        raise LangFormatError(1, "缺少 UTF-8 BOM，不是語言檔")
+        raise LangFormatError(1, i18n.translate("langfile", "缺少 UTF-8 BOM，不是語言檔"))
     body = plain[len(langcrypt.BOM):]
     try:
         text = body.decode("utf-8")
     except UnicodeDecodeError as e:
-        raise LangFormatError(body[:e.start].count(b"\n") + 1, "不是有效的 UTF-8 文字") from None
+        raise LangFormatError(body[:e.start].count(b"\n") + 1, i18n.translate("langfile", "不是有效的 UTF-8 文字")) from None
     lines = text.split("\r\n")
     for no, line in enumerate(lines, 1):
         if "\n" in line or "\r" in line:
-            raise LangFormatError(no, "換行字元必須是 CRLF")
+            raise LangFormatError(no, i18n.translate("langfile", "換行字元必須是 CRLF"))
     trailing = lines[-1] == ""
     if trailing:
         lines.pop()
@@ -112,17 +114,19 @@ def parse(plain: bytes) -> LangFile:
     while i < len(lines):
         flag = lines[i]
         if not (flag.startswith("||") and len(flag) == FLAG_LEN and flag[2:].isdigit()):
-            raise LangFormatError(i + 1, f"這裡應該是旗標行（|| 加 30 位數字），實際是：{flag[:40]!r}")
+            raise LangFormatError(i + 1, i18n.translate("langfile", "這裡應該是旗標行（|| 加 30 位數字），實際是：{actual}")
+                                  .format(actual=repr(flag[:40])))
         p = [int(flag[2 + 2 * k:4 + 2 * k]) for k in range(NFIELDS)]
         if p[0] != 1:
-            raise LangFormatError(i + 1, f"旗標第 1 欄應為 01，實際是 {p[0]:02d}")
+            raise LangFormatError(i + 1, i18n.translate("langfile", "旗標第 1 欄應為 01，實際是 {actual}").format(actual=f"{p[0]:02d}"))
         n = sum(p)
         block = lines[i + 1:i + 1 + n]
         if len(block) < n:
-            raise LangFormatError(i + 1, f"旗標記錄 {n} 行，但檔案只剩 {len(block)} 行")
+            raise LangFormatError(i + 1, i18n.translate("langfile", "旗標記錄 {n} 行，但檔案只剩 {left} 行").format(n=n, left=len(block)))
         for j, line in enumerate(block):
             if line.startswith("||"):
-                raise LangFormatError(i + 2 + j, f"旗標記錄 {n} 行，但第 {j + 1} 行就遇到下一筆的旗標（行數少了）")
+                raise LangFormatError(i + 2 + j, i18n.translate(
+                    "langfile", "旗標記錄 {n} 行，但第 {at} 行就遇到下一筆的旗標（行數少了）").format(n=n, at=j + 1))
         c = 1
 
         def take(k: int) -> list[str]:

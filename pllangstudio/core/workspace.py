@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from .. import appconfig
-from . import glossary, langcrypt, langfile
+from . import glossary, i18n, langcrypt, langfile
 from .langfile import LangFile
 
 DEFAULT_PLSQL_DIR = Path(r"C:\Program Files\PLSQL Developer 17\Languages")
@@ -237,15 +237,18 @@ class Workspace:
         """記事本只能改翻譯：檔頭與筆的識別碼必須跟 .lang 完全相同（ADR-0008 規則 3）。
         否則亂碼或刪掉整筆的 .txt 會被當成正本，存檔後語言檔就少了內容。"""
         if not lf.entries:
-            raise langfile.LangFormatError(1, "找不到任何一筆翻譯資料，檔案可能已損毀")
+            raise langfile.LangFormatError(1, i18n.translate("workspace", "找不到任何一筆翻譯資料，檔案可能已損毀"))
         if lf.header != ref.header:
-            raise langfile.LangFormatError(1, "檔頭（前幾行 : 開頭的資訊）不可修改")
+            raise langfile.LangFormatError(1, i18n.translate("workspace", "檔頭（前幾行 : 開頭的資訊）不可修改"))
         keys, ref_keys = {e.key for e in lf.entries}, {e.key for e in ref.entries}
         if keys != ref_keys:
             missing, extra = ref_keys - keys, keys - ref_keys
-            detail = (f"少了 {len(missing)} 筆，例如 {'.'.join(next(iter(missing)))}" if missing
-                      else f"多了 {len(extra)} 筆，例如 {'.'.join(next(iter(extra)))}")
-            raise langfile.LangFormatError(1, f"筆的組成跟語言檔不同：{detail}。只能修改翻譯，不能新增或刪除筆")
+            detail = (i18n.translate("workspace", "少了 {n} 筆，例如 {key}").format(
+                          n=len(missing), key=".".join(next(iter(missing)))) if missing
+                      else i18n.translate("workspace", "多了 {n} 筆，例如 {key}").format(
+                          n=len(extra), key=".".join(next(iter(extra)))))
+            raise langfile.LangFormatError(1, i18n.translate(
+                "workspace", "筆的組成跟語言檔不同：{detail}。只能修改翻譯，不能新增或刪除筆").format(detail=detail))
 
     # ---------- 部署 ----------
 
@@ -255,7 +258,7 @@ class Workspace:
         backup = None
         if dst.exists():
             if dst.read_bytes() == data:
-                return DeployResult(True, False, "PL/SQL Developer 裡的檔案已經是最新的")
+                return DeployResult(True, False, i18n.translate("workspace", "PL/SQL Developer 裡的檔案已經是最新的"))
             backup = self.backup(dst, prefix="installed_")
         try:
             langfile.atomic_write(dst, data)
@@ -263,9 +266,12 @@ class Workspace:
             try:
                 ok = elevate(src, dst)
             except Exception as e:  # 提升權限的過程出任何錯都要變成看得見的失敗
-                return DeployResult(False, False, f"沒有寫入：提升權限時發生錯誤（{e}）。修改仍保留在工作區。", backup)
+                return DeployResult(False, False, i18n.translate(
+                    "workspace", "沒有寫入：提升權限時發生錯誤（{error}）。修改仍保留在工作區。").format(error=e), backup)
             if not ok:
-                return DeployResult(False, False, "沒有寫入：使用者取消了 UAC，或系統管理員複製失敗。修改仍保留在工作區。", backup)
+                return DeployResult(False, False, i18n.translate(
+                    "workspace", "沒有寫入：使用者取消了 UAC，或系統管理員複製失敗。修改仍保留在工作區。"), backup)
         if not dst.exists() or dst.read_bytes() != data:
-            return DeployResult(False, False, f"寫入後讀回的內容不一致。原檔備份在：{backup}", backup)
-        return DeployResult(True, True, "已部署，重新啟動 PL/SQL Developer 後生效。", backup)
+            return DeployResult(False, False, i18n.translate(
+                "workspace", "寫入後讀回的內容不一致。原檔備份在：{backup}").format(backup=backup), backup)
+        return DeployResult(True, True, i18n.translate("workspace", "已部署，重新啟動 PL/SQL Developer 後生效。"), backup)

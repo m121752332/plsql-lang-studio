@@ -18,7 +18,7 @@
 7. [一次改很多：批次工具](#7-一次改很多批次工具)
 8. [存檔和部署：讓修改生效](#8-存檔和部署讓修改生效)
 9. [用記事本修改](#9-用記事本修改)
-10. [主題與字型](#10-主題與字型)
+10. [主題、字型與介面語言](#10-主題字型與介面語言)
 11. [事件紀錄：出問題時怎麼回報](#11-事件紀錄出問題時怎麼回報)
 12. [安全機制：不怕改壞](#12-安全機制不怕改壞)
 13. [快速鍵一覽](#13-快速鍵一覽)
@@ -332,7 +332,7 @@ Button
 
 ---
 
-## 10. 主題與字型
+## 10. 主題、字型與介面語言
 
 ### 主題：亮色、暗色、跟隨系統
 
@@ -358,6 +358,12 @@ Button
 | **Ctrl+0** | 還原預設字型與大小 |
 
 表格的列高會跟著字變大，不會被切掉。你的選擇會被記住，下次打開時沿用。
+
+### 介面語言：繁體中文、簡體中文、英文、日文
+
+在 **配置 ▸ 配置… ▸ 外觀 ▸ 語言** 選擇本程式自己的畫面要用哪種語言，按「確定」或「套用」後**立即切換**，不必重新開啟程式，表格裡還沒存檔的修改也不受影響。預設是繁體中文，你的選擇會被記住。
+
+> 💡 這裡換的是**本程式的介面**，跟你正在編輯的語言檔（PL/SQL Developer 的翻譯）無關。使用說明（F1）與事件紀錄的內容目前只有繁體中文。
 
 ---
 
@@ -479,7 +485,7 @@ workspace\                ← 工作區（你的所有修改都在這裡）
 
 | 檔案 | 位置 | 內容 |
 |---|---|---|
-| 程式設定 | `%APPDATA%\PLLangStudio\app.json` | 上次使用的工作區、主題、字型與大小、事件紀錄保留天數 |
+| 程式設定 | `%APPDATA%\PLLangStudio\app.json` | 上次使用的工作區、主題、字型與大小、介面語言、事件紀錄保留天數 |
 | 事件紀錄 | `%APPDATA%\PLLangStudio\events.db` | 操作與錯誤的紀錄，在事件檢視器查看 |
 | 事件紀錄備份 | `%APPDATA%\PLLangStudio\backup\` | 初始化事件紀錄前自動產生的 zip |
 | PL/SQL Developer 語言檔 | `C:\Program Files\PLSQL Developer 17\Languages\` | 部署的目的地 |
@@ -557,13 +563,14 @@ uv 會建立 `.venv\` 資料夾，並安裝所有套件（包含測試與打包�
 | 想做什麼 | 指令 | 說明 |
 |---|---|---|
 | **打開程式** | `uv run python -m pllangstudio` | 跟雙擊 exe 一樣會打開視窗。`-m pllangstudio` 的意思是「執行 pllangstudio 這個套件」 |
-| **執行全部測試** | `uv run pytest` | 跑所有自動測試，最後看到 `142 passed` 之類的訊息就代表全部通過 |
+| **執行全部測試** | `uv run pytest` | 跑所有自動測試，最後看到 `356 passed` 之類的訊息就代表全部通過 |
 | 測試時顯示更多資訊 | `uv run pytest -v` | 每個測試一行，看得到名稱與結果 |
 | 只跑某個資料夾的測試 | `uv run pytest tests/core` | 只測核心邏輯（比較快，不需要畫面） |
 | 只跑名稱含某個字的測試 | `uv run pytest -k glossary` | 只跑名稱裡有 `glossary` 的測試 |
 | 把警告也當成錯誤 | `uv run pytest -W error` | 正式發佈前建議用這個，確保測試輸出乾淨 |
 | **打包成 exe** | `uv run build` | 產生 `dist\PLLangStudio.exe`，見下方 |
 | **產生發行用 zip** | `uv run package` | 先打包 exe，再壓成 `bin\PLLangStudio-v版本號-win64.zip`，見下方 |
+| **更新介面翻譯** | `uv run i18n` | 改了介面文字後執行：把新字串收進 `translations\*.ts`，翻好後再執行一次，編成程式用的 `.qm`（見 [ADR-0020](docs/adr/0020-interface-languages.md)） |
 | 查看 Python 版本 | `uv run python --version` | 應該顯示 `Python 3.14.x` |
 | 查看程式版本 | `uv run python -c "import pllangstudio; print(pllangstudio.__version__)"` | 例如 `0.2.0` |
 

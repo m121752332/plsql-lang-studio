@@ -75,9 +75,9 @@ def test_filter_by_status_and_search(model):
     f.set_status(Status.SIMPLIFIED)
     assert i in {f.mapToSource(f.index(r, 0)).row() for r in range(f.rowCount())}
     f.set_status(None)
-    f.set_search("tablespace", "英文")
+    f.set_search("tablespace", "source")
     assert 0 < f.rowCount() < 200
-    f.set_search("取消后", "副語系")
+    f.set_search("取消后", "slave")
     assert f.rowCount() == 1
 
 

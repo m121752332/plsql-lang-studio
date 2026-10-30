@@ -1,4 +1,4 @@
-"""程式本身的設定（上次用的工作區、主題、字型、事件紀錄保留天數），存在 %APPDATA%\\PLLangStudio\\app.json。"""
+"""程式本身的設定（上次用的工作區、主題、字型、介面語言、事件紀錄保留天數），存在 %APPDATA%\\PLLangStudio\\app.json。"""
 
 import json
 import os
@@ -8,6 +8,7 @@ from pathlib import Path
 from .core import langfile
 
 THEME_MODES = ("light", "dark", "system")
+LANGUAGES = ("zh_TW", "zh_CN", "en", "ja")  # 介面語言，第一個是預設（也是程式原文）
 LOG_RETENTION_DEFAULT = {"info": 90, "warning": 90, "error": 30}  # 事件紀錄保留天數：資訊／警告／錯誤
 LOG_DAYS_RANGE = (1, 3650)
 
@@ -105,3 +106,13 @@ def log_retention() -> dict[str, int]:
 
 def remember_log_retention(retention: dict[str, int]) -> None:
     _update(**{f"log_days_{group}": int(retention[group]) for group in LOG_RETENTION_DEFAULT})
+
+
+def language() -> str:
+    """介面語言（見 ADR-0020）；沒設定或不認得時用繁體中文。"""
+    value = _load().get("language")
+    return value if value in LANGUAGES else LANGUAGES[0]
+
+
+def remember_language(code: str) -> None:
+    _update(language=code)

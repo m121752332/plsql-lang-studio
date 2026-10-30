@@ -4,6 +4,8 @@
 XOR 是對稱的，所以加密與解密是同一個運算。
 """
 
+from . import i18n
+
 KEY = bytes.fromhex(
     "c5c8dfe2f1fc8b96ada0b74a5954637e15180f32212cdbc6fdf0e79a8984b3ae"
     "65687f42515c2b360d0017eaf9f4c3deb5b8af92818c7b665d50473a2924130e"
@@ -26,7 +28,7 @@ def xor(data: bytes) -> bytes:
 def decrypt(data: bytes) -> bytes:
     plain = xor(data)
     if not plain.startswith(BOM):
-        raise ValueError("這不是有效的 PL/SQL Developer .lang 檔（解密後沒有 UTF-8 BOM）")
+        raise ValueError(i18n.translate("langcrypt", "這不是有效的 PL/SQL Developer .lang 檔（解密後沒有 UTF-8 BOM）"))
     return plain
 
 

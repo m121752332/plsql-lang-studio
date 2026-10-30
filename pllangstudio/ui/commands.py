@@ -1,11 +1,12 @@
 """可復原的編輯步驟（見 ADR-0010：整批算一個步驟）。"""
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
 
 class EditCommand(QUndoCommand):
     def __init__(self, model, edits: list[tuple[int, str, str]], label: str):
-        super().__init__(f"{label}（{len(edits)} 個字串）")
+        super().__init__(QCoreApplication.translate("EditCommand", "{label}（{n} 個字串）").format(label=label, n=len(edits)))
         self.model = model
         self.edits = edits  # (列, 修改前, 修改後)
 

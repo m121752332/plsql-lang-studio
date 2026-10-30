@@ -14,11 +14,11 @@ class PreviewDialog(QDialog):
 
     def __init__(self, title: str, changes: list[Change], parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"{title} — 預覽")
+        self.setWindowTitle(self.tr("{title} — 預覽").format(title=title))
         self.resize(1000, 600)
         self.changes = changes
         self.table = QTableWidget(len(changes), 4)
-        self.table.setHorizontalHeaderLabels(["識別碼", "英文", "修改前", "修改後"])
+        self.table.setHorizontalHeaderLabels([self.tr("識別碼"), self.tr("英文"), self.tr("修改前"), self.tr("修改後")])
         for r, c in enumerate(changes):
             key = QTableWidgetItem(".".join(c.row.key))
             key.setFlags(key.flags() | Qt.ItemIsUserCheckable)
@@ -28,12 +28,12 @@ class PreviewDialog(QDialog):
                 self.table.setItem(r, col, QTableWidgetItem(text.replace("\n", " ⏎ ")))
         self.table.resizeColumnsToContents()
         self.summary = QLabel()
-        all_btn, none_btn = QPushButton("全選"), QPushButton("全不選")
+        all_btn, none_btn = QPushButton(self.tr("全選")), QPushButton(self.tr("全不選"))
         all_btn.clicked.connect(lambda: self._set_all(Qt.Checked))
         none_btn.clicked.connect(lambda: self._set_all(Qt.Unchecked))
         self.table.itemChanged.connect(self._update_summary)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("套用")
+        buttons.button(QDialogButtonBox.Ok).setText(self.tr("套用"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         top = QHBoxLayout()
@@ -60,7 +60,8 @@ class PreviewDialog(QDialog):
         self._update_summary()
 
     def _update_summary(self, *_):
-        self.summary.setText(f"共 {len(self.changes)} 個字串，勾選 {len(self.checked())} 個")
+        self.summary.setText(self.tr("共 {total} 個字串，勾選 {checked} 個").format(total=len(self.changes),
+                                                                              checked=len(self.checked())))
 
     def checked(self) -> list[Change]:
         return [c for r, c in enumerate(self.changes) if self.table.item(r, 0).checkState() == Qt.Checked]
@@ -69,19 +70,19 @@ class PreviewDialog(QDialog):
 class ReplaceDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("在副語系中尋找取代")
+        self.setWindowTitle(self.tr("在副語系中尋找取代"))
         self.find = QLineEdit()
         self.replace = QLineEdit()
-        self.regex = QCheckBox("規則運算式")
-        self.case = QCheckBox("區分大小寫")
+        self.regex = QCheckBox(self.tr("規則運算式"))
+        self.case = QCheckBox(self.tr("區分大小寫"))
         self.case.setChecked(True)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("預覽")
+        buttons.button(QDialogButtonBox.Ok).setText(self.tr("預覽"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form = QFormLayout(self)
-        form.addRow("尋找：", self.find)
-        form.addRow("取代為：", self.replace)
+        form.addRow(self.tr("尋找："), self.find)
+        form.addRow(self.tr("取代為："), self.replace)
         form.addRow(self.regex)
         form.addRow(self.case)
         form.addRow(buttons)
