@@ -84,7 +84,7 @@ class CompareTable(QTableView):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, workspace_root: Path, elevate_fn=elevate.elevated_copy, ask=None, info=None, toast=None,
+    def __init__(self, workspace_root: Path | None, elevate_fn=elevate.elevated_copy, ask=None, info=None, toast=None,
                  theme_manager: ThemeManager | None = None, font_manager: FontManager | None = None,
                  help_launcher=None, language_manager: LanguageManager | None = None):
         super().__init__()
@@ -104,9 +104,11 @@ class MainWindow(QMainWindow):
         self.master_name = self.slave_name = ""
         self._busy = 0  # 對話框或長操作進行中，poll_txt 先不要插手
         self.event_viewer = None
+        self.ws: Workspace | None = None
         self.resize(1400, 860)
         self._build_ui()
-        self.open_workspace(workspace_root)
+        if workspace_root is not None:  # None：由呼叫端先顯示視窗再開啟，啟動時比較快看到畫面
+            self.open_workspace(workspace_root)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll_txt)
         self.timer.start(1000)
@@ -249,11 +251,12 @@ class MainWindow(QMainWindow):
     def retranslate(self) -> None:
         """切換介面語言：固定文字、表格標題與狀態列都換成新的語言。"""
         self._set_texts()
-        self._show_workspace_label()
         self.model.refresh_colors()
         self._update_counts()
         self._show_detail()
-        self.refresh_files()
+        if self.ws is not None:
+            self._show_workspace_label()
+            self.refresh_files()
 
     def changeEvent(self, event) -> None:
         if event.type() == QEvent.LanguageChange:

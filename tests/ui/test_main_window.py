@@ -55,6 +55,20 @@ def test_opens_default_pair_with_auto_import(win, env):
     assert win.filter_buttons[None].text() == "全部 6,672"
 
 
+def test_window_shows_before_workspace_opens(qtbot, env):
+    """啟動時先顯示視窗、再載入語言檔，開程式比較快看到畫面。"""
+    root, _ = env
+    w = MainWindow(None, info=lambda *a, **k: None)
+    qtbot.addWidget(w)
+    w.show()
+    assert w.model.rowCount() == 0
+    w.retranslate()  # 還沒有工作區時切換介面語言、檢查 .txt 都不能出錯
+    w.poll_txt()
+    w.open_workspace(root)
+    assert (w.master_name, w.slave_name) == ("Chinese.lang", "Taiwan.lang")
+    assert w.model.rowCount() > 0
+
+
 def test_switch_slave_keeps_selected_key(win):
     i = row_of(win, "&取消")
     key = win.model.rows[i].key

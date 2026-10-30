@@ -383,6 +383,7 @@ Button
   - **初始化事件紀錄…**：清空全部紀錄，事件編號從 #1 重新開始。刪除前會自動備份到 `backup` 資料夾，備份失敗就不會刪除。
 - 錯誤對話框有 **複製事件編號** 和 **開啟事件檢視器** 兩個按鈕，按後者會直接列出這一筆。
 - 如果上次程式被強制關閉或當機，下次開啟時事件紀錄會多一筆警告「上次程式未正常結束」，回報時一起提供。
+- 每次開啟程式都會記一筆「啟動耗時：開啟視窗 1.21 秒，載入語言檔 0.48 秒，合計 1.69 秒」：開啟視窗是從雙擊到看見視窗，載入語言檔是讀取、比對主語系與副語系到填好表格。在事件檢視器輸入關鍵字「啟動耗時」就能看到每次的紀錄。如果啟動時跳出找不到 PL/SQL Developer 的對話框，等你選目錄的時間也會算進載入語言檔。
 
 ---
 
@@ -466,7 +467,7 @@ A：可以。主語系、副語系都能換成任何語言檔，例如主語系�
 A：那個檔案是比較舊的版本，有些筆只存在其中一邊，程式會標成「單邊」讓你知道。這是正常的。
 
 **Q：換新版的 exe 時要注意什麼？**
-A：換掉 `PLLangStudio.exe` 和 `PLLangHelp\` 資料夾就好，**不要刪掉旁邊的 `workspace` 資料夾**，裡面是你所有的修改和備份。
+A：換掉 `PLLangStudio.exe`、`_internal\` 和 `PLLangHelp\` 資料夾就好（從 0.5 以前的版本升級時，`_internal\` 是新增的），**不要刪掉旁邊的 `workspace` 資料夾**，裡面是你所有的修改和備份。
 
 ---
 
@@ -474,6 +475,7 @@ A：換掉 `PLLangStudio.exe` 和 `PLLangHelp\` 資料夾就好，**不要刪掉
 
 ```
 PLLangStudio.exe
+_internal\                ← 程式本體（Qt、Python 等），不要刪除也不要搬開
 PLLangHelp\               ← 說明程式（按 F1 顯示使用說明，不要刪除；刪了會改用瀏覽器開）
 workspace\                ← 工作區（你的所有修改都在這裡）
 ├─ lang\                  ← 匯入的語言檔（加密），存檔就是寫到這裡
@@ -568,7 +570,7 @@ uv 會建立 `.venv\` 資料夾，並安裝所有套件（包含測試與打包�
 | 只跑某個資料夾的測試 | `uv run pytest tests/core` | 只測核心邏輯（比較快，不需要畫面） |
 | 只跑名稱含某個字的測試 | `uv run pytest -k glossary` | 只跑名稱裡有 `glossary` 的測試 |
 | 把警告也當成錯誤 | `uv run pytest -W error` | 正式發佈前建議用這個，確保測試輸出乾淨 |
-| **打包成 exe** | `uv run build` | 產生 `dist\PLLangStudio.exe`，見下方 |
+| **打包成 exe** | `uv run build` | 產生 `dist\PLLangStudio\` 資料夾（內含 `PLLangStudio.exe`），見下方 |
 | **產生發行用 zip** | `uv run package` | 先打包 exe，再壓成 `bin\PLLangStudio-v版本號-win64.zip`，見下方 |
 | **更新介面翻譯** | `uv run i18n` | 改了介面文字後執行：把新字串收進 `translations\*.ts`，翻好後再執行一次，編成程式用的 `.qm`（見 [ADR-0020](docs/adr/0020-interface-languages.md)） |
 | 查看 Python 版本 | `uv run python --version` | 應該顯示 `Python 3.14.x` |
@@ -585,7 +587,7 @@ uv run build
 | 參數 | 意思 |
 |---|---|
 | `--noconfirm` | 覆蓋舊的打包結果時不要再問 |
-| `--onefile` | 打包成**單一個** exe，方便複製 |
+| `--onedir` | 打包成**資料夾**（exe 加上 `_internal\`）。單一 exe（`--onefile`）每次開程式都要先解壓上百 MB，會慢 1 秒以上（見 [ADR-0021](docs/adr/0021-onedir-for-fast-startup.md)） |
 | `--windowed` | 執行時不要跳出黑色的命令列視窗 |
 | `--collect-all opencc` | 把 OpenCC 的字典檔一起包進去。⚠️ **不能省略**，否則 exe 裡的簡轉繁會找不到字典 |
 | `--add-data`（`pllangstudio\resources`） | 把靜態檔案（圖示等）一起包進去，視窗左上角與工作列才有圖示 |
@@ -596,9 +598,12 @@ uv run build
 
 完成後：
 
-- 成品在 **`dist\PLLangStudio.exe`**，約 54 MB。
-- 接著會再打包**說明程式** **`dist\PLLangHelp\`**（資料夾形式，約 414 MB，內含 Chromium）。主程式另外加上 `--exclude-module` 排除 Qt WebEngine，所以不會變大；說明程式打包完會自動刪掉用不到的檔案（除錯用檔案、其他語言的翻譯等）。兩支加起來大約需要兩分鐘。
-- 打包過程的暫存檔和 `.spec` 都在 `build\`，可以刪掉，下次打包會重新產生。
+- 成品在 **`dist\PLLangStudio\`**：執行裡面的 `PLLangStudio.exe`。程式本體在 `_internal\`（約 75 MB）；打包完會自動刪掉用不到的 Qt 檔案（軟體 OpenGL、QML、PDF、其他語言的 Qt 翻譯等，約 51 MB）。主程式另外加上 `--exclude-module` 排除 Qt WebEngine，所以不會變大。
+- 說明程式先打包到 `build\dist\PLLangHelp\`（約 408 MB，內含 Chromium），再複製到 `dist\PLLangStudio\PLLangHelp\`。說明程式和它用到的檔案都沒改過時，會沿用上次的結果，不會重新打包。
+- 程式碼沒改時重新打包只要幾秒；改過程式碼約 45 秒（PyInstaller 要重新分析 import）。
+- 打包過程的暫存檔和 `.spec` 都在 `build\`，可以刪掉，下次打包會重新產生（說明程式也會重新打包）。
+
+> ⚠️ 每次打包都會**整個清掉重建** `dist\PLLangStudio\`。不要把工作區放在這個資料夾裡面，請放在 `dist\workspace` 之類的其他位置。
 
 ### 產生發行用 zip
 
@@ -606,7 +611,7 @@ uv run build
 uv run package
 ```
 
-先做一次上面的 `uv run build`，再把 `PLLangStudio.exe`、`PLLangHelp\` 資料夾、`README.md`、`LICENSE` 壓成 **`bin\PLLangStudio-v版本號-win64.zip`**（約 226 MB）。版本號取自 `pyproject.toml`，所以發行新版前記得先改版本號；同版本的舊 zip 會被覆蓋。
+先做一次上面的 `uv run build`，再把 `dist\PLLangStudio\` 裡的所有檔案（`PLLangStudio.exe`、`_internal\`、`PLLangHelp\`）加上 `README.md`、`LICENSE` 壓成 **`bin\PLLangStudio-v版本號-win64.zip`**。zip 最外層就是 exe，不另外包一層資料夾，所以解壓後 `workspace\` 仍會建在 exe 旁邊，跟舊版一樣。版本號取自 `pyproject.toml`，所以發行新版前記得先改版本號；同版本的舊 zip 會被覆蓋。
 
 > ⚠️ 打包前請先**關閉正在執行的 PLLangStudio.exe**，否則舊的 exe 被占用，沒辦法覆蓋。
 
@@ -635,7 +640,7 @@ $env:APPDATA = "$PWD\dev-appdata"; uv run python -m pllangstudio
 | `uv : 無法辨識 'uv' 詞彙` | uv 還沒裝好，或裝完沒有重開 PowerShell |
 | `No module named 'pllangstudio'` | 不在專案資料夾裡，先 `cd` 到有 `pyproject.toml` 的資料夾 |
 | 大部分測試被跳過（`skipped`） | 找不到 `C:\Program Files\PLSQL Developer 17\Languages`。大部分測試要讀取真實的語言檔，沒有安裝 PL/SQL Developer 時就會跳過，只剩不需要語言檔的少數測試會執行 |
-| 打包時 `PermissionError` | `dist\PLLangStudio.exe` 還在執行中，先關掉它 |
+| 打包時 `PermissionError` | `dist\PLLangStudio\PLLangStudio.exe` 還在執行中，先關掉它 |
 | exe 的簡轉繁沒反應或閃退 | 打包時少了 `--collect-all opencc` |
 
 ---
@@ -654,7 +659,7 @@ $env:APPDATA = "$PWD\dev-appdata"; uv run python -m pllangstudio
 | 畫面 | PySide6（Qt 6） |
 | 簡轉繁 | OpenCC（`s2twp`：台灣用字＋台灣用語） |
 | 測試 | pytest＋pytest-qt，直接用 PL/SQL Developer 的真實語言檔測試（唯讀） |
-| 打包 | PyInstaller，主程式打成單一 exe（約 54 MB）；說明程式 `PLLangHelp\` 是資料夾形式 |
+| 打包 | PyInstaller，主程式與說明程式 `PLLangHelp\` 都是資料夾形式（onedir），開程式不必先解壓 |
 | 使用說明 | 本機靜態網頁，由說明程式用 Qt WebEngine 顯示（見 ADR-0019） |
 
 ```

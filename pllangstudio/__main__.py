@@ -1,11 +1,12 @@
 import platform
 import sys
+import time
 
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from pllangstudio import __version__, appconfig, eventlog, resources
+from pllangstudio import __version__, appconfig, eventlog, resources, startup
 from pllangstudio.core.workspace import default_root
 from pllangstudio.ui.error_box import error_box
 from pllangstudio.ui.fonts import FontManager
@@ -36,9 +37,13 @@ def main() -> int:
     theme = ThemeManager(app)  # 先套用主題、字型和介面語言再建立視窗，避免開啟時閃一下
     fonts = FontManager(app)
     language = LanguageManager(app)
-    root = appconfig.last_workspace() or default_root(appconfig.app_dir())
-    win = MainWindow(root, theme_manager=theme, font_manager=fonts, language_manager=language)
+    win = MainWindow(None, theme_manager=theme, font_manager=fonts, language_manager=language)
     win.show()
+    app.processEvents()  # 先把空的視窗畫出來，再載入語言檔（約 0.5 秒），開程式比較快看到畫面
+    win.repaint()
+    shown = time.time()
+    win.open_workspace(appconfig.last_workspace() or default_root(appconfig.app_dir()))
+    eventlog.info("程式", startup.summary(shown - startup.process_start(), time.time() - shown))
     code = app.exec()
     eventlog.end_session()  # app.exec() 拋出例外時不會執行到，下次啟動就會記成異常結束
     eventlog.shutdown()

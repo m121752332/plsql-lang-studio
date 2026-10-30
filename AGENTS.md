@@ -17,7 +17,7 @@ translations/  介面翻譯原稿 pllangstudio_<語言>.ts（簡中、英文、�
 tests/
 ├─ core/   核心模組測試
 └─ ui/     pytest-qt 畫面測試
-docs/adr/  架構決策紀錄（0001～0020）
+docs/adr/  架構決策紀錄（0001～0021）
 ```
 
 ## 常用指令
@@ -30,7 +30,7 @@ docs/adr/  架構決策紀錄（0001～0020）
 | 執行程式 | `uv run python -m pllangstudio` |
 | 跑全部測試 | `uv run pytest`（預設已用 xdist 平行，約 11 秒） |
 | 單獨除錯某個測試 | `uv run pytest -n0 路徑::測試名` |
-| 打包成 exe | `uv run build`（產生 `dist\PLLangStudio.exe` 與說明程式 `dist\PLLangHelp\`） |
+| 打包成 exe | `uv run build`（產生 `dist\PLLangStudio\`：`PLLangStudio.exe`、`_internal\`、說明程式 `PLLangHelp\`） |
 | 產生發行 zip | `uv run package`（build 後壓成 `bin\PLLangStudio-v版本號-win64.zip`） |
 | 更新介面翻譯 | `uv run i18n`（收集新字串到 `translations\*.ts` 並編成 `.qm`；翻好後再執行一次） |
 | 加依賴 | `uv add 套件`；開發用加 `--dev` |

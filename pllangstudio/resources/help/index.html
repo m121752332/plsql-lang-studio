@@ -332,6 +332,7 @@ Button
     <li><strong>配置 ▸ 事件檢視器…</strong>：依等級（資訊／警告／錯誤）、期間、關鍵字篩選；輸入 <code>#1234</code> 可直接找到該事件。選取一筆可在下方看到完整內容與錯誤堆疊。</li>
     <li><strong>匯出篩選結果…</strong>：把目前列出的紀錄壓成 zip（含程式與系統版本），附在回報裡。</li>
     <li>如果上次程式被強制關閉或當機，下次開啟時會多一筆警告「上次程式未正常結束」。</li>
+    <li>每次開啟程式都會記一筆「啟動耗時：開啟視窗 1.21 秒，載入語言檔 0.48 秒，合計 1.69 秒」：開啟視窗是從雙擊到看見視窗，載入語言檔是讀取、比對主語系與副語系到填好表格。在事件檢視器輸入關鍵字「啟動耗時」就能看到每次的紀錄。</li>
   </ul>
   <figure><img src="img/event-viewer.png" alt="事件檢視器"><figcaption>事件檢視器：上方篩選，中間是事件清單，下方是選取事件的完整內容</figcaption></figure>
   <h3>保留與維護（配置 ▸ 配置… ▸ 紀錄事件）</h3>
@@ -349,6 +350,7 @@ Button
 <section id="files">
   <h2>檔案放在哪裡</h2>
 <pre>PLLangStudio.exe
+_internal\                ← 程式本體（Qt、Python 等），請不要刪除或搬開
 PLLangHelp\               ← 說明程式（顯示這份使用說明，請不要刪除）
 workspace\                ← 工作區（你的所有修改都在這裡）
 ├─ lang\                  ← 匯入的語言檔（加密），存檔就是寫到這裡
@@ -407,7 +409,7 @@ workspace\                ← 工作區（你的所有修改都在這裡）
   <details><summary>舊版的語言檔有些列標著 ◐？</summary>
     <p>那個檔案是比較舊的版本，有些筆只存在其中一邊，程式會標成「單邊」讓你知道，這是正常的。</p></details>
   <details><summary>換新版的 exe 時要注意什麼？</summary>
-    <p>換掉 <code>PLLangStudio.exe</code> 與 <code>PLLangHelp\</code> 資料夾就好，<strong>不要刪掉旁邊的 <code>workspace</code> 資料夾</strong>，裡面是你所有的修改和備份。</p></details>
+    <p>換掉 <code>PLLangStudio.exe</code>、<code>_internal\</code> 與 <code>PLLangHelp\</code> 資料夾就好（從 0.5 以前的版本升級時，<code>_internal\</code> 是新增的），<strong>不要刪掉旁邊的 <code>workspace</code> 資料夾</strong>，裡面是你所有的修改和備份。</p></details>
 </section>
 </main>
 </body>
