@@ -387,11 +387,15 @@ class MainWindow(QMainWindow):
             if others:
                 s.slave = others[0]
         for n in (self.ws.settings.master, self.ws.settings.slave):  # 第一次使用：自動匯入預設的兩個檔案
-            if n not in names and (self.ws.installed_dir / n).exists():
-                try:
+            if n in names:
+                continue
+            try:
+                if (self.ws.installed_dir / n).exists():
                     self.ws.import_lang(n)
-                except (OSError, ValueError) as e:
-                    self._error("匯入", self.tr("無法匯入"), f"{n}\n\n{e}", e)
+                elif self.ws.add_bundled(n):  # PL/SQL Developer 沒附這個檔：改用程式內附的版本
+                    eventlog.info("匯入", f"PL/SQL Developer 沒有 {n}，已放入程式內附的版本")
+            except (OSError, ValueError) as e:
+                self._error("匯入", self.tr("無法匯入"), f"{n}\n\n{e}", e)
         self.master_name = self.slave_name = ""
         self.set_pair(self.ws.settings.master, self.ws.settings.slave, confirm=False)
 

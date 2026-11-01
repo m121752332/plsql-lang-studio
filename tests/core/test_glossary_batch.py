@@ -1,6 +1,6 @@
 import pytest
 
-from langdata import LANG_DIR, needs_lang_dir
+from langdata import lang_path, needs_lang_dir
 from pllangstudio.core import batch, compare, convert, glossary, langfile
 from pllangstudio.core.glossary import Rule
 
@@ -53,8 +53,8 @@ def test_default_glossary_after_s2twp(simplified, expected):
 
 @needs_lang_dir
 def test_preview_functions():
-    zh = langfile.load(LANG_DIR / "Chinese.lang")
-    tw = langfile.load(LANG_DIR / "Taiwan.lang")
+    zh = langfile.load(lang_path("Chinese.lang"))
+    tw = langfile.load(lang_path("Taiwan.lang"))
     rows = compare.align(zh, tw)
     changes = batch.preview_replace(rows, zh, tw, "巨集", "Macro")
     assert changes and all("巨集" in c.before and "Macro" in c.after for c in changes)

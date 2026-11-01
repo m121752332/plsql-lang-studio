@@ -2,7 +2,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QUndoStack
 
-from langdata import LANG_DIR, needs_lang_dir
+from langdata import lang_path, needs_lang_dir
 from pllangstudio.core import langfile
 from pllangstudio.core.compare import Status
 from pllangstudio.ui.compare_model import COL_MASTER, COL_SLAVE, CompareFilter, CompareModel
@@ -13,7 +13,7 @@ pytestmark = needs_lang_dir
 @pytest.fixture
 def model(qtbot):
     m = CompareModel(QUndoStack())
-    m.load(langfile.load(LANG_DIR / "Chinese.lang"), langfile.load(LANG_DIR / "Taiwan.lang"), ["游標", "批准"])
+    m.load(langfile.load(lang_path("Chinese.lang")), langfile.load(lang_path("Taiwan.lang")), ["游標", "批准"])
     return m
 
 
@@ -84,7 +84,7 @@ def test_filter_by_status_and_search(model):
 @pytest.fixture
 def hu_model(qtbot):
     m = CompareModel(QUndoStack())
-    m.load(langfile.load(LANG_DIR / "Chinese.lang"), langfile.load(LANG_DIR / "Hungarian.lang"), [])
+    m.load(langfile.load(lang_path("Chinese.lang")), langfile.load(lang_path("Hungarian.lang")), [])
     return m
 
 

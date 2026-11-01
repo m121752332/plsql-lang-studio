@@ -2,7 +2,7 @@ import shutil
 
 import pytest
 
-from langdata import LANG_DIR, needs_lang_dir
+from langdata import lang_path, needs_lang_dir
 from pllangstudio.core import langfile
 from pllangstudio.core.langfile import Field, LangFormatError
 from pllangstudio.core.workspace import ImportConflict, Workspace
@@ -16,7 +16,7 @@ def installed(tmp_path):
     d = tmp_path / "Languages"
     d.mkdir()
     for n in ["Chinese.lang", "Taiwan.lang"]:
-        shutil.copy(LANG_DIR / n, d / n)
+        shutil.copy(lang_path(n), d / n)
     return d
 
 
@@ -40,7 +40,7 @@ def test_settings_roundtrip(ws, tmp_path):
 
 def test_import_creates_lang_and_txt(ws):
     ws.import_lang("Taiwan.lang")
-    assert (ws.lang_dir / "Taiwan.lang").read_bytes() == (LANG_DIR / "Taiwan.lang").read_bytes()
+    assert (ws.lang_dir / "Taiwan.lang").read_bytes() == lang_path("Taiwan.lang").read_bytes()
     assert ws.txt_path("Taiwan.lang").read_text(encoding="utf-8-sig").startswith(":Taiwan")
     assert [i.name for i in ws.list_installed() if i.imported] == ["Taiwan.lang"]
     assert ws.list_workspace()[0].deployed is True

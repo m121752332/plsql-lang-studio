@@ -17,7 +17,7 @@ translations/  介面翻譯原稿 pllangstudio_<語言>.ts（簡中、英文、�
 tests/
 ├─ core/   核心模組測試
 └─ ui/     pytest-qt 畫面測試
-docs/adr/  架構決策紀錄（0001～0021）
+docs/adr/  架構決策紀錄（0001～0022）
 ```
 
 ## 常用指令

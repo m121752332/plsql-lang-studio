@@ -86,6 +86,7 @@ PLLangStudio 幫你解決這三件事：
    `C:\Program Files\PLSQL Developer 17\Languages`
    找不到時會請你自己選（**檔案 ▸ PL/SQL 語言目錄…**）。
 3. 自動把 `Chinese.lang`（簡體）和 `Taiwan.lang`（繁體）**複製一份**到工作區。
+   PL/SQL Developer 原本沒有附 `Taiwan.lang`；找不到時會改用本程式內附的版本，之後一樣可以編輯、部署。
 4. 打開比對畫面：主語系＝簡體，副語系＝繁體。
 
 > 💡 **放心**：程式複製的是「副本」，PL/SQL Developer 裡的原檔完全不會被動到，直到你按「部署」為止。

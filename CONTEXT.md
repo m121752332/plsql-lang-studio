@@ -36,6 +36,10 @@ _Avoid_: MASTER、主要、來源、左邊
 比對時正在編輯的語言檔，預設是 Taiwan.lang（繁體）。不能和主語系是同一個檔案。
 _Avoid_: SLAVE、副要、目標、右邊
 
+**內附語言檔**：
+PL/SQL Developer 原本沒附、由本程式附上的語言檔（目前只有 Taiwan.lang）。Languages 目錄沒有時放進工作區，再照一般流程部署。
+_Avoid_: 預設檔、範本
+
 **主題**：
 介面的配色模式：亮色、暗色，或跟隨 Windows 的深淺色設定。
 _Avoid_: 佈景、皮膚、風格

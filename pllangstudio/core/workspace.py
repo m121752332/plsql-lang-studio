@@ -11,11 +11,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from .. import appconfig
+from .. import appconfig, resources
 from . import glossary, i18n, langcrypt, langfile
 from .langfile import LangFile
 
 DEFAULT_PLSQL_DIR = Path(r"C:\Program Files\PLSQL Developer 17\Languages")
+BUNDLED_LANGS = ("Taiwan.lang",)  # PL/SQL Developer 原本沒附的語言檔，由程式內附（ADR-0022）
+
+
+def bundled_lang(name: str) -> Path | None:
+    p = resources.path(name)
+    return p if name in BUNDLED_LANGS and p.exists() else None
 
 
 def find_plsql_lang_dir() -> Path | None:
@@ -161,6 +167,20 @@ class Workspace:
             self.backup_txt(name)  # 記事本改過的 .txt 不能無聲覆蓋
         langfile.atomic_write(dst, data)
         self.write_txt(name, plain)
+
+    def add_bundled(self, name: str) -> bool:
+        """工作區沒有這個檔時，放入程式內附的版本；工作區已有同名檔一律不動。回傳是否有放入。"""
+        src, dst = bundled_lang(name), self.lang_dir / name
+        if src is None or dst.exists():
+            return False
+        data = src.read_bytes()
+        plain = langcrypt.decrypt(data)
+        langfile.parse(plain)
+        if self.txt_path(name).exists() and self._raw_differs(name, plain):
+            self.backup_txt(name)
+        langfile.atomic_write(dst, data)
+        self.write_txt(name, plain)
+        return True
 
     def remove_lang(self, name: str) -> Path:
         """把語言檔從工作區移除（先備份）。只動工作區，不會碰 PL/SQL Developer 的 Languages 目錄。"""

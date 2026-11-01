@@ -9,7 +9,7 @@ from PySide6.QtCore import QCoreApplication, Qt  # noqa: E402
 # Qt WebEngine 要求在建立 QApplication 前設定（說明程式的測試會用到）
 QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
 
-from langdata import LANG_DIR  # noqa: E402
+from langdata import lang_path  # noqa: E402
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def lang_copy(tmp_path):
     """把真實語言檔複製到暫存資料夾，測試只能改副本。"""
     def _copy(name: str):
         dst = tmp_path / name
-        dst.write_bytes((LANG_DIR / name).read_bytes())
+        dst.write_bytes(lang_path(name).read_bytes())
         return dst
     return _copy
 

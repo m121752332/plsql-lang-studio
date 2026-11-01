@@ -2,7 +2,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QUndoStack
 
-from langdata import LANG_DIR, needs_lang_dir
+from langdata import lang_path, needs_lang_dir
 from pllangstudio.core import langfile
 from pllangstudio.core.batch import Change
 from pllangstudio.core.compare import Row
@@ -60,7 +60,7 @@ def test_preview_dialog_select_all_and_none_are_fast(qtbot):
 def chinese_model(qtbot):
     def _load(slave_name: str = "Taiwan.lang"):
         m = CompareModel(QUndoStack())
-        m.load(langfile.load(LANG_DIR / "Chinese.lang"), langfile.load(LANG_DIR / slave_name),
+        m.load(langfile.load(lang_path("Chinese.lang")), langfile.load(lang_path(slave_name)),
                ["游標", "批准"])
         return m
     return _load

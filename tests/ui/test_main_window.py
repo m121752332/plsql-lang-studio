@@ -6,8 +6,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QCloseEvent, QShortcut
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from langdata import LANG_DIR, needs_lang_dir
-from pllangstudio import eventlog
+from langdata import lang_path, needs_lang_dir
+from pllangstudio import eventlog, resources
 from pllangstudio.core import langfile
 from pllangstudio.core.compare import Status
 from pllangstudio.core.langfile import Field
@@ -24,7 +24,7 @@ def env(tmp_path, monkeypatch):
     installed = tmp_path / "Languages"
     installed.mkdir()
     for n in ["Chinese.lang", "Taiwan.lang", "Japanese.lang"]:
-        shutil.copy(LANG_DIR / n, installed / n)
+        shutil.copy(lang_path(n), installed / n)
     root = tmp_path / "workspace"
     root.mkdir()
     (root / "settings.json").write_text(json.dumps({"plsql_lang_dir": str(installed)}), encoding="utf-8")
@@ -53,6 +53,17 @@ def test_opens_default_pair_with_auto_import(win, env):
     assert win.model.rowCount() == 6672
     assert (root / "lang" / "Taiwan.lang").exists() and (root / "txt" / "Taiwan.txt").exists()
     assert win.filter_buttons[None].text() == "全部 6,672"
+
+
+def test_missing_taiwan_uses_bundled_copy(qtbot, env):
+    """PL/SQL Developer 原本沒有 Taiwan.lang：放入程式內附的版本，才能編輯並部署。"""
+    root, installed = env
+    (installed / "Taiwan.lang").unlink()
+    w = MainWindow(root, info=lambda *a, **k: None)
+    qtbot.addWidget(w)
+    assert (w.master_name, w.slave_name) == ("Chinese.lang", "Taiwan.lang")
+    assert (root / "lang" / "Taiwan.lang").read_bytes() == resources.path("Taiwan.lang").read_bytes()
+    assert [(i.name, i.deployed) for i in w.ws.list_workspace() if i.name == "Taiwan.lang"] == [("Taiwan.lang", False)]
 
 
 def test_window_shows_before_workspace_opens(qtbot, env):
